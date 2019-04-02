@@ -16,6 +16,7 @@ qualimap=$basedir/software/qualimap_v2.2.1/qualimap
 $qualimap bamqc \
     -gd HUMAN \
     -bam $bam \
+    -gff $targets \
     -outdir $outdir \
     --skip-duplicated \
     --collect-overlap-pairs \
