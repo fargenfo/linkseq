@@ -3,7 +3,7 @@
 # TODO:
 # Consider whether the chosen supporting dataset is suitable.
 # Supply pedigree information (does this use more than just trios?)
-# Can't get VariantEval to work at all.
+# Consider which filters to apply.
 
 vcf=$1
 out=$2
@@ -28,28 +28,7 @@ $gatk CalculateGenotypePosteriors \
 $gatk VariantFiltration \
     -R $reference \
     -V posteriors.vcf \
-    -O filtered.vcf \
+    -O $out \
     --genotype-filter-name "GQ20" \
     --genotype-filter-expression "GQ<=20"
-
-# VariantEval fails if the output file doesn't already exist. NOTE: this should be fixed in a newer version of GATK, as of the 19th of February 2019.
-echo -n > variant_eval.table
-
-$gatk VariantEval \
-    -R $reference \
-    --eval posteriors.vcf \
-    --output variant_eval.table \
-    --dbsnp $dbsnp \
-    -L $targets \
-    -no-ev \
-    --eval-module TiTvVariantEvaluator \
-    --eval-module CountVariants \
-    --eval-module CompOverlap \
-    --eval-module ValidationReport \
-    --stratification-module Filter
-
-#$gatk ValidateVariants \
-#    -V filtered.vcf \
-#    -R $reference \
-#    --dbsnp $dbsnp
 

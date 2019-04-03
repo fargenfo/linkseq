@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# NOTE: WIP
+
 bam=$1
 bed=$2
 out=$3

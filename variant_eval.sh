@@ -1,9 +1,11 @@
 #!/bin/bash
 
 # TODO:
-# Consider whether the chosen supporting dataset is suitable.
-# Supply pedigree information (does this use more than just trios?)
-# Can't get VariantEval to work at all.
+# -comp and -kown-name can be used to specify a different set of known variants.
+# If I want to know the novel concordant rate, I must supply another known variants file with -comp.
+# The "Novelty" stratification module is default.
+# Multithreading.
+# Consider which evaluation and stratification modules to use. The "Filter" and "Sample" stratification modules seem like a good idea.
 
 vcf=$1
 
@@ -32,6 +34,6 @@ $gatk VariantEval \
     --eval-module CountVariants \
     --eval-module CompOverlap \
     --eval-module ValidationReport \
-    --stratification-module Sample \
+    --stratification-module Filter \
 
 

@@ -3,9 +3,8 @@
 module load longranger-2.2.2
 
 sample_id=$1
-index_id=$2
-fastq_path=$3
-threads=$4
+fastq_path=$2
+threads=$3
 
 basedir=/mnt/fargen/experiments/joint_call
 
