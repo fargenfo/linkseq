@@ -12,7 +12,6 @@ basedir=/mnt/fargen/experiments/joint_call
 reference=$basedir/resources/reference_10x_genomics/refdata-GRCh38-2.1.0
 
 longranger align --id=$sample_id \
-   --sample=$index_id \
    --reference=$reference \
    --fastqs=$fastq_path \
    --localcores=$threads \
