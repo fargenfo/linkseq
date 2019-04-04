@@ -20,7 +20,7 @@ resources_dir=$basedir/resources
 reference=$resources_dir/reference_10x_genomics/refdata-GRCh38-2.1.0/fasta/genome.fa
 dbsnp=$resources_dir/gatk_bundle/Homo_sapiens_assembly38.dbsnp138/Homo_sapiens_assembly38.dbsnp138.vcf
 
-
+# Add variant effect prediction.
 java -jar $snpEff \
     -i vcf \
     -o vcf \
@@ -35,10 +35,12 @@ $gatk ValidateVariants \
     -R $reference \
     --dbsnp $dbsnp
 
+# Add rsid from dbSNP
 # VariantAnnotator is still in beta (as of 20th of March 2019).
 $gatk VariantAnnotator \
     -R $reference \
     -V snpeff.vcf \
+    --dbsnp $dbsnp \
     -O $out
 
 

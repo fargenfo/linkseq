@@ -16,13 +16,11 @@ resources_dir=$basedir/resources
 reference=$resources_dir/reference_10x_genomics/refdata-GRCh38-2.1.0/fasta/genome.fa
 targets=$resources_dir/sureselect_human_all_exon_v6_utr_grch38/S07604624_Padded.bed
 dbsnp=$resources_dir/gatk_bundle/Homo_sapiens_assembly38.dbsnp138/Homo_sapiens_assembly38.dbsnp138.vcf
-mills=$resources_dir/gatk_bundle/Mills_and_1000G_gold_standard.indels.hg38/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz
 
 $gatk BaseRecalibrator \
     -I $bam \
     -R $reference \
     --known-sites $dbsnp \
-    --known-sites $mills \
     -O recal_data.table \
     --tmp-dir=tmp \
     --java-options "-Xmx10g -Xms10g"
