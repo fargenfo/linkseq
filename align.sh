@@ -5,6 +5,7 @@ module load longranger-2.2.2
 sample_id=$1
 fastq_path=$2
 threads=$3
+mem=$4
 
 basedir=/mnt/fargen/experiments/joint_call
 
@@ -15,5 +16,6 @@ longranger align --id=$sample_id \
    --reference=$reference \
    --fastqs=$fastq_path \
    --localcores=$threads \
+   --localmem=$mem \
    --uiport=3003
 
