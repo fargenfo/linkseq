@@ -16,6 +16,8 @@ params.outdir = null
 params.help = false
 
 // TODO:
+// Remove all "touch" and "echo" commands that generate placeholder files.
+
 helpMessage = """
 Parameters:
 --outdir            Desired path/name of folder to store output in.
@@ -128,8 +130,6 @@ process analyze_covariates {
     """
 }
 
-// TODO:
-// Is it necessary to output the .bai file in order to save it with publishDir?
 process apply_bqsr {
     publishDir "${params.outdir}/bam", mode: 'copy', overwrite: true, saveAs: { filename -> "${params.sample}_$filename" }
 
@@ -209,13 +209,13 @@ process fastqc_analysis {
     """
     #fastqc -q --dir tmp --outdir fastqc_report
     mkdir tmp
-    fastqc -q --dir tmp --outdir . -a $adapters --contaminants $contaminants -l $limits $fastqs
+    echo fastqc -q --dir tmp --outdir . -a $adapters --contaminants $contaminants -l $limits $fastqs
     """
 }
 
 
 process qualimap_analysis {
-    publishDir "${params.outdir}/fastqc", mode: 'copy'
+    publishDir "${params.outdir}/bamqc", mode: 'copy'
 
     input:
     file bam from recalibrated_bam_copy_ch
@@ -226,14 +226,17 @@ process qualimap_analysis {
     script:
     """
     mkdir qualimap_results
-    qualimap bamqc \
+    awk 'BEGIN{OFS="\\t"}{ if(NR > 2) { print \$1,\$2,\$3,\$4,0,"." } }' $targets > 'targets_6_fields.bed'
+    echo qualimap bamqc \
         -gd HUMAN \
         -bam $bam \
-        -gff $targets \
+        -gff 'targets_6_fields.bed' \
         -outdir 'qualimap_results' \
         --skip-duplicated \
         --collect-overlap-pairs \
         -nt $params.threads \
         --java-mem-size=${params.mem}G
+    touch qualimap_results/results_would_go_here.txt
     """
+}
 
