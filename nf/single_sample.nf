@@ -1,5 +1,8 @@
 #!/usr/bin/env nextflow
 
+// TODO:
+// tmp folders for various processes.
+
 // Input parameters.
 //params.fastq_paths = null
 params.sample = null
@@ -125,6 +128,8 @@ process analyze_covariates {
     """
 }
 
+// TODO:
+// Is it necessary to output the .bai file in order to save it with publishDir?
 process apply_bqsr {
     publishDir "${params.outdir}/bam", mode: 'copy', overwrite: true, saveAs: { filename -> "${params.sample}_$filename" }
 
@@ -133,7 +138,7 @@ process apply_bqsr {
     file bam from aligned_bam_copy_ch
 
     output:
-    file 'recalibrated.bam' into recalibrated_bam_ch
+    file 'recalibrated.bam' into recalibrated_bam_ch, recalibrated_bam_copy_ch
     file 'recalibrated.bam.bai' into recalibrated_idx_ch
 
     script:
@@ -150,3 +155,85 @@ process apply_bqsr {
     touch 'recalibrated.bam.bai'
     """
 }
+
+process call_sample {
+    input:
+    file bam from recalibrated_bam_ch
+
+    output:
+    file 'haplotypecalled.gvcf' into gvcf_ch
+
+    script:
+    """
+    echo gatk HaplotypeCaller  \
+        -I $bam \
+        -O 'haplotypecalled.gvcf' \
+        -R $reference \
+        -L $targets \
+        --dbsnp $dbsnp \
+        -ERC GVCF \
+        --create-output-variant-index \
+        --annotation MappingQualityRankSumTest \
+        --annotation QualByDepth \
+        --annotation ReadPosRankSumTest \
+        --annotation RMSMappingQuality \
+        --annotation FisherStrand \
+        --annotation Coverage \
+        --verbosity INFO \
+        --tmp-dir=tmp \
+        --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
+    touch 'haplotypecalled.gvcf'
+    """
+}
+
+// Path to FASTQ files. The first '*' matches the Illumina flowcell ID string.
+fastq_ch = Channel.fromPath("$params.fastq_path/*/$params.sample/*.fastq.gz")
+
+// TODO:
+// Because my fastqc installation is not installed at /etc/fastqc, it fails to find
+// adapters, contaminants, and limits at /etc/fastqc/Configuration. The pipeline should
+// assume that these files are in the correct place.
+process fastqc_analysis {
+    publishDir "${params.outdir}/fastqc", mode: 'copy',
+        saveAs: {filename -> filename.indexOf(".zip") > 0 ? "zips/$filename" : "$filename"}
+
+    input:
+    val fastq_list from fastq_ch.toList()
+
+    output:
+    file '*.{zip,html}' into fastqc_report_ch
+    file '.command.out' into fastqc_stdout_ch
+
+    script:
+    fastqs = (fastq_list as List).join(' ')
+    """
+    #fastqc -q --dir tmp --outdir fastqc_report
+    mkdir tmp
+    fastqc -q --dir tmp --outdir . -a $adapters --contaminants $contaminants -l $limits $fastqs
+    """
+}
+
+
+process qualimap_analysis {
+    publishDir "${params.outdir}/fastqc", mode: 'copy'
+
+    input:
+    file bam from recalibrated_bam_copy_ch
+
+    output:
+    file 'qualimap_results' into qualimap_results_ch
+
+    script:
+    """
+    mkdir qualimap_results
+    qualimap bamqc \
+        -gd HUMAN \
+        -bam $bam \
+        -gff $targets \
+        -outdir 'qualimap_results' \
+        --skip-duplicated \
+        --collect-overlap-pairs \
+        -nt $params.threads \
+        --java-mem-size=${params.mem}G
+    """
+
