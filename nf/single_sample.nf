@@ -1,8 +1,5 @@
 #!/usr/bin/env nextflow
 
-// TODO:
-// tmp folders for various processes.
-
 // Input parameters.
 //params.fastq_paths = null
 params.sample = null
@@ -14,9 +11,6 @@ params.threads = null
 params.mem = null
 params.outdir = null
 params.help = false
-
-// TODO:
-// Remove all "touch" and "echo" commands that generate placeholder files.
 
 helpMessage = """
 Parameters:
@@ -54,7 +48,8 @@ println "outdir             : ${params.outdir}"
 
 // Get file handlers for input files.
 //fastq_paths = file(params.fastq_paths)
-reference = file(params.reference)
+reference = file(params.reference)  // Directory of 10x reference.
+reference_fa = file(params.reference + '/fasta/genome.fa')  // Reference fasta file.
 dbsnp = file(params.dbsnp)
 targets = file(params.targets)
 
@@ -66,32 +61,33 @@ targets = file(params.targets)
 // NOTE: only while developing the pipeline for running a single sample.
 fastq_paths_ch = Channel.from(params.fastq_path)
 
+// Align FASTQ reads to reference with LongRanger ALIGN command.
+// https://support.10xgenomics.com/genome-exome/software/pipelines/latest/advanced/other-pipelines
 process align_reads {
-    //echo true
-
     input:
     val fastq_path from fastq_paths_ch
 
     output:
-    file "$params.sample/outs/possorted_bam.bam" into aligned_bam_ch, aligned_bam_copy_ch
+    file "${params.sample}/outs/possorted_bam.bam" into aligned_bam_ch, aligned_bam_copy_ch
 
     script:
     """
-    echo longranger align --id=$params.sample --sample=$params.sample \
+    longranger align --id=${params.sample} --sample=${params.sample} \
         --reference=$reference \
         --fastqs=$fastq_path \
         --localcores=$params.threads \
         --localmem=$params.mem
-    #    --uiport=3003
-    mkdir -p '$params.sample/outs'
-    touch '$params.sample/outs/possorted_bam.bam'
     """
 }
 
+/*
+The next three processes, prepare_bqsr_table, analyze_covariates, and apply_bqsr, deal with base quality score
+recalibration, in preparation for GATK best practices.
+BQSR: https://software.broadinstitute.org/gatk/documentation/article?id=44
+*/
 
+// Generate recalibration table for BQSR.
 process prepare_bqsr_table {
-    //echo true
-
     input:
     file bam from aligned_bam_ch
 
@@ -100,18 +96,19 @@ process prepare_bqsr_table {
 
     script:
     """
-    echo gatk BaseRecalibrator \
+    mkdir tmp
+    gatk BaseRecalibrator \
             -I $bam \
-            -R $reference \
+            -R $reference_fa \
             --known-sites $dbsnp \
             -O 'bqsr.table' \
             --tmp-dir=tmp \
             --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
-    touch 'bqsr.table'
     """
 
 }
 
+// Evaluate BQSR.
 process analyze_covariates {
     publishDir "${params.outdir}/bam/analyze_covariates", mode: 'copy', overwrite: true, saveAs: { filename -> "${params.sample}_$filename" }
 
@@ -123,13 +120,13 @@ process analyze_covariates {
 
     script:
     """
-    echo gatk AnalyzeCovariates \
+    gatk AnalyzeCovariates \
         -bqsr $bqsr_table \
         -plots 'AnalyzeCovariates.pdf'
-    touch 'AnalyzeCovariates.pdf'
     """
 }
 
+// Apply recalibration to BAM file.
 process apply_bqsr {
     publishDir "${params.outdir}/bam", mode: 'copy', overwrite: true, saveAs: { filename -> "${params.sample}_$filename" }
 
@@ -139,36 +136,37 @@ process apply_bqsr {
 
     output:
     file 'recalibrated.bam' into recalibrated_bam_ch, recalibrated_bam_copy_ch
-    file 'recalibrated.bam.bai' into recalibrated_idx_ch
+    file 'recalibrated.bai' into recalibrated_idx_ch
 
     script:
     """
-    echo gatk ApplyBQSR \
-        -R $reference \
+    mkdir tmp
+    gatk ApplyBQSR \
+        -R $reference_fa \
         -I $bam \
         --bqsr-recal-file $bqsr_table \
         -L $targets \
         -O 'recalibrated.bam' \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
-    touch 'recalibrated.bam'
-    touch 'recalibrated.bam.bai'
     """
 }
 
+// Call variants in sample with HapltypeCaller, yielding a GVCF.
 process call_sample {
     input:
     file bam from recalibrated_bam_ch
 
     output:
-    file 'haplotypecalled.gvcf' into gvcf_ch
+    file "${params.sample}.gvcf" into gvcf_ch
 
     script:
     """
-    echo gatk HaplotypeCaller  \
+    mkdir tmp
+    gatk HaplotypeCaller  \
         -I $bam \
-        -O 'haplotypecalled.gvcf' \
-        -R $reference \
+        -O "${params.sample}.gvcf" \
+        -R $reference_fa \
         -L $targets \
         --dbsnp $dbsnp \
         -ERC GVCF \
@@ -182,19 +180,19 @@ process call_sample {
         --verbosity INFO \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
-    touch 'haplotypecalled.gvcf'
     """
 }
+
+/*
+Below we perform QC of data.
+*/
 
 // Path to FASTQ files. The first '*' matches the Illumina flowcell ID string.
 fastq_ch = Channel.fromPath("$params.fastq_path/*/$params.sample/*.fastq.gz")
 
-// TODO:
-// Because my fastqc installation is not installed at /etc/fastqc, it fails to find
-// adapters, contaminants, and limits at /etc/fastqc/Configuration. The pipeline should
-// assume that these files are in the correct place.
+// Run FastQC for QC metrics of raw data.
 process fastqc_analysis {
-    publishDir "${params.outdir}/fastqc", mode: 'copy',
+    publishDir "${params.outdir}/fastqc/${params.sample}", mode: 'copy',
         saveAs: {filename -> filename.indexOf(".zip") > 0 ? "zips/$filename" : "$filename"}
 
     input:
@@ -207,36 +205,34 @@ process fastqc_analysis {
     script:
     fastqs = (fastq_list as List).join(' ')
     """
-    #fastqc -q --dir tmp --outdir fastqc_report
     mkdir tmp
-    echo fastqc -q --dir tmp --outdir . -a $adapters --contaminants $contaminants -l $limits $fastqs
+    fastqc -q --dir tmp --outdir . $fastqs
     """
 }
 
-
+// Run Qualimap for QC metrics of aligned and recalibrated BAM.
 process qualimap_analysis {
-    publishDir "${params.outdir}/bamqc", mode: 'copy'
+    publishDir "${params.outdir}/bamqc", mode: 'copy',
+        saveAs: {filename -> "${params.sample}"}
 
     input:
     file bam from recalibrated_bam_copy_ch
 
     output:
-    file 'qualimap_results' into qualimap_results_ch
+    file "qualimap_results" into qualimap_results_ch
 
     script:
     """
-    mkdir qualimap_results
     awk 'BEGIN{OFS="\\t"}{ if(NR > 2) { print \$1,\$2,\$3,\$4,0,"." } }' $targets > 'targets_6_fields.bed'
-    echo qualimap bamqc \
+    qualimap bamqc \
         -gd HUMAN \
         -bam $bam \
         -gff 'targets_6_fields.bed' \
-        -outdir 'qualimap_results' \
+        -outdir "qualimap_results" \
         --skip-duplicated \
         --collect-overlap-pairs \
         -nt $params.threads \
         --java-mem-size=${params.mem}G
-    touch qualimap_results/results_would_go_here.txt
     """
 }
 
