@@ -154,6 +154,8 @@ process apply_bqsr {
 
 // Call variants in sample with HapltypeCaller, yielding a GVCF.
 process call_sample {
+    publishDir "${params.outdir}/gvcf", mode: 'copy', overwrite: true
+
     input:
     file bam from recalibrated_bam_ch
 
@@ -224,6 +226,7 @@ process qualimap_analysis {
     script:
     """
     awk 'BEGIN{OFS="\\t"}{ if(NR > 2) { print \$1,\$2,\$3,\$4,0,"." } }' $targets > 'targets_6_fields.bed'
+    unset DISPLAY
     qualimap bamqc \
         -gd HUMAN \
         -bam $bam \
