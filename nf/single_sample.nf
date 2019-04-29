@@ -1,7 +1,6 @@
 #!/usr/bin/env nextflow
 
 // Input parameters.
-//params.fastq_paths = null
 params.sample = null
 params.fastq_path = null
 params.reference = null
@@ -12,6 +11,8 @@ params.mem = null
 params.outdir = null
 params.help = false
 
+// TODO: make help string
+// Help message
 helpMessage = """
 Parameters:
 --outdir            Desired path/name of folder to store output in.
@@ -24,7 +25,6 @@ if (params.help){
 }
 
 // Make sure necessary input parameters are assigned.
-//assert params.fastq_paths != null, 'Input parameter "fastq_paths" cannot be unasigned.'
 assert params.sample != null, 'Input parameter "sample" cannot be unasigned.'
 assert params.fastq_path != null, 'Input parameter "fastq_path" cannot be unasigned.'
 assert params.reference != null, 'Input parameter "reference" cannot be unasigned.'
@@ -53,12 +53,7 @@ reference_fa = file(params.reference + '/fasta/genome.fa')  // Reference fasta f
 dbsnp = file(params.dbsnp)
 targets = file(params.targets)
 
-// TODO: take in multiple paths from multiple samples.
-// Turn the file with FASTQ paths into a channel with [sample, path] tuples.
-//fastq_paths_ch = Channel.fromPath(fastq_paths)
-//fastq_paths_ch = fastq_paths_ch.splitCsv(header: true).map { it -> [it.sample, it.fastq_path] }
-
-// NOTE: only while developing the pipeline for running a single sample.
+// Channel for the path to the FASTQ directory.
 fastq_paths_ch = Channel.from(params.fastq_path)
 
 // Align FASTQ reads to reference with LongRanger ALIGN command.
@@ -75,8 +70,8 @@ process align_reads {
     longranger align --id=${params.sample} --sample=${params.sample} \
         --reference=$reference \
         --fastqs=$fastq_path \
-        --localcores=$params.threads \
-        --localmem=$params.mem
+        --localcores=${params.threads} \
+        --localmem=${params.mem}
     """
 }
 
@@ -105,7 +100,6 @@ process prepare_bqsr_table {
             --tmp-dir=tmp \
             --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
     """
-
 }
 
 // Evaluate BQSR.
@@ -190,7 +184,7 @@ Below we perform QC of data.
 */
 
 // Path to FASTQ files. The first '*' matches the Illumina flowcell ID string.
-fastq_ch = Channel.fromPath("$params.fastq_path/*/$params.sample/*.fastq.gz")
+fastq_ch = Channel.fromPath("${params.fastq_path}/*/${params.sample}/*.fastq.gz")
 
 // Run FastQC for QC metrics of raw data.
 process fastqc_analysis {
@@ -234,7 +228,7 @@ process qualimap_analysis {
         -outdir "qualimap_results" \
         --skip-duplicated \
         --collect-overlap-pairs \
-        -nt $params.threads \
+        -nt ${params.threads} \
         --java-mem-size=${params.mem}G
     """
 }
