@@ -1,4 +1,7 @@
 #!/usr/bin/env nextflow
+/*
+Author: Ólavur Mortensen <olavur@fargen.fo>
+*/
 
 // Input parameters.
 params.sample = null
@@ -37,7 +40,6 @@ assert params.outdir != null, 'Input parameter "outdir" cannot be unasigned.'
 println "P I P E L I N E     I P U T S    "
 println "================================="
 println "sample             : ${params.sample}"
-//println "fastq_paths        : ${params.fastq_paths}"
 println "fastq_path         : ${params.fastq_path}"
 println "reference          : ${params.reference}"
 println "dbsnp              : ${params.dbsnp}"
@@ -47,7 +49,6 @@ println "mem                : ${params.mem}"
 println "outdir             : ${params.outdir}"
 
 // Get file handlers for input files.
-//fastq_paths = file(params.fastq_paths)
 reference = file(params.reference)  // Directory of 10x reference.
 reference_fa = file(params.reference + '/fasta/genome.fa')  // Reference fasta file.
 dbsnp = file(params.dbsnp)
