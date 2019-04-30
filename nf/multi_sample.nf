@@ -366,22 +366,24 @@ process annotate_effect {
     """
 }
 
+// TODO: is this step necessary? Perhaps put it at the very end, to make sure the VCF is
+// correctly formatted and such.
 // Validate the VCF sice we used a non-GAKT tool.
-process validate_vcf {
-    input:
-    file vcf from effect_vcf_validate_ch
-
-    output:
-    file ".command.log" into validation_log_ch
-
-    script:
-    """
-    gatk ValidateVariants \
-        -V $vcf \
-        -R $reference_fa \
-        --dbsnp $dbsnp
-    """
-}
+//process validate_vcf {
+//    input:
+//    file vcf from effect_vcf_validate_ch
+//
+//    output:
+//    file ".command.log" into validation_log_ch
+//
+//    script:
+//    """
+//    gatk ValidateVariants \
+//        -V $vcf \
+//        -R $reference_fa \
+//        --dbsnp $dbsnp
+//    """
+//}
 
 // Add rsid from dbSNP
 // NOTE: VariantAnnotator is still in beta (as of 20th of March 2019).
