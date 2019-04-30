@@ -401,3 +401,30 @@ process annotate_rsid {
         -O "rsid_annotated.vcf"
     """
 }
+
+process variant_evaluation {
+    input:
+    file vcf from rsid_annotated_vcf_ch
+
+    output:
+    file "variant_eval.table" into variant_eval_table_ch
+
+    script:
+    """
+    # VariantEval fails if the output file doesn't already exist. NOTE: this should be fixed in a newer version of GATK, as of the 19th of February 2019.
+    echo -n > "variant_eval.table"
+
+    gatk VariantEval \
+        -R $reference_fa \
+        --eval $vcf \
+        --output "variant_eval.table" \
+        --dbsnp $dbsnp \
+        -L $targets \
+        -no-ev \
+        --eval-module TiTvVariantEvaluator \
+        --eval-module CountVariants \
+        --eval-module CompOverlap \
+        --eval-module ValidationReport \
+        --stratification-module Filter
+    """
+}
