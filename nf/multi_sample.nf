@@ -71,6 +71,8 @@ reference_fa = file(params.reference + '/fasta/genome.fa')  // Reference fasta f
 dbsnp = file(params.dbsnp)
 mill = file(params.mills)
 kGphase1 = file(params.kGphase1)
+// NOTE: 1000 Genomes phase 3 is not used anywhere at the moment, but could be used
+// in CalculateGenotypePosteriors.
 kGphase3 = file(params.kGphase3)
 omni = file(params.omni)
 hapmap = file(params.hapmap)
@@ -112,8 +114,8 @@ process joint_genotyping {
     val "done" from consolidate_gvcf_status_ch
 
     output:
-    file "variants.vcf" into genotyped_vcf_ch
-    file "variants.vcf" into genotyped_vcf_copy_ch
+    file "genotyped.vcf" into genotyped_vcf_ch
+    file "genotyped.vcf" into genotyped_vcf_copy_ch
 
     script:
     """
@@ -121,7 +123,7 @@ process joint_genotyping {
     echo gatk GenotypeGVCFs \
         -V gendb://$genomicsdb \
         -R $reference_fa \
-        -O "variants.vcf" \
+        -O "genotyped.vcf" \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
     """
@@ -324,7 +326,8 @@ process merge_snps_indels {
 
 // TODO:
 // Consider whether to use a supporting dataset. I commented out the "-supporting" argument,
-// because it biases the data toward the population the supporting dataset is based on.
+// because it biases the data toward the population the supporting dataset is based on. If
+// only few samples are in the dataset, a supporting dataset can be quite useful.
 // Supply pedigree information (does this use more than just trios?)
 // Consider which filters, if any, to apply.
 // Calculate the genotype posteriors based on all the samples in the VCF.
@@ -344,8 +347,11 @@ process refine_genotypes {
     """
 }
 
+// TODO: memory specification?
 // Annotate the VCF with effect prediction. Output some summary stats from the effect prediction as well.
 process annotate_effect {
+    publishDir "${params.outdir}/variants", pattern: "snpEff_stats.csv", mode: 'copy', overwrite: true
+
     input:
     file vcf from refined_vcf_ch
 
@@ -388,6 +394,8 @@ process annotate_effect {
 // Add rsid from dbSNP
 // NOTE: VariantAnnotator is still in beta (as of 20th of March 2019).
 process annotate_rsid {
+    publishDir "${params.outdir}/variants", mode: 'copy', overwrite: true, saveAs: {filename -> "variants.vcf"}
+
     input:
     file vcf from effect_vcf_annotate_ch
 
@@ -405,6 +413,8 @@ process annotate_rsid {
 }
 
 process variant_evaluation {
+    publishDir "${params.outdir}/variants", mode: 'copy', overwrite: true
+
     input:
     file vcf from rsid_annotated_vcf_ch
 
