@@ -60,6 +60,9 @@ fastq_paths_ch = Channel.from(params.fastq_path)
 // Align FASTQ reads to reference with LongRanger ALIGN command.
 // https://support.10xgenomics.com/genome-exome/software/pipelines/latest/advanced/other-pipelines
 process align_reads {
+    memory = "${params.mem}GB"
+    cpus = params.threads
+
     input:
     val fastq_path from fastq_paths_ch
 
@@ -84,6 +87,9 @@ BQSR: https://software.broadinstitute.org/gatk/documentation/article?id=44
 
 // Generate recalibration table for BQSR.
 process prepare_bqsr_table {
+    memory = "${params.mem}GB"
+    cpus = params.threads
+
     input:
     file bam from aligned_bam_ch
 
@@ -105,6 +111,9 @@ process prepare_bqsr_table {
 
 // Evaluate BQSR.
 process analyze_covariates {
+    memory = "${params.mem}GB"
+    cpus = params.threads
+
     publishDir "${params.outdir}/bam/analyze_covariates", mode: 'copy', overwrite: true, saveAs: { filename -> "${params.sample}_$filename" }
 
     input:
@@ -123,6 +132,9 @@ process analyze_covariates {
 
 // Apply recalibration to BAM file.
 process apply_bqsr {
+    memory = "${params.mem}GB"
+    cpus = params.threads
+
     publishDir "${params.outdir}/bam", mode: 'copy', overwrite: true, saveAs: { filename -> "${params.sample}_$filename" }
 
     input:
@@ -149,6 +161,9 @@ process apply_bqsr {
 
 // Call variants in sample with HapltypeCaller, yielding a GVCF.
 process call_sample {
+    memory = "${params.mem}GB"
+    cpus = params.threads
+
     publishDir "${params.outdir}/gvcf", mode: 'copy', overwrite: true
 
     input:
@@ -188,6 +203,8 @@ Below we perform QC of data.
 fastq_ch = Channel.fromPath("${params.fastq_path}/*/${params.sample}/*.fastq.gz")
 
 // Run FastQC for QC metrics of raw data.
+// Note that FastQC will allocate 250 MB of memory per thread used. Since FastQC is not a bottleneck of
+// this pipeline, it will be run with a single thread.
 process fastqc_analysis {
     publishDir "${params.outdir}/fastqc/${params.sample}", mode: 'copy',
         saveAs: {filename -> filename.indexOf(".zip") > 0 ? "zips/$filename" : "$filename"}
@@ -209,6 +226,9 @@ process fastqc_analysis {
 
 // Run Qualimap for QC metrics of aligned and recalibrated BAM.
 process qualimap_analysis {
+    memory = "${params.mem}GB"
+    cpus = params.threads
+
     publishDir "${params.outdir}/bamqc", mode: 'copy',
         saveAs: {filename -> "${params.sample}"}
 
