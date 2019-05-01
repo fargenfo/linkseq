@@ -88,7 +88,7 @@ process consolidate_gvcf {
     val gvcf_arg from gvcf_arg_ch.toList()
 
     output:
-    val "done" into consolidate_gvcf_status_ch
+    file "genomicsdb/run" into genomicsdb_ch
 
     script:
     gvcf_arg_str = (gvcf_arg as List).join(' ')
@@ -98,11 +98,11 @@ process consolidate_gvcf {
     echo gatk GenomicsDBImport \
         $gvcf_arg_str \
         -L $targets \
-        --genomicsdb-workspace-path $genomicsdb \
+        --genomicsdb-workspace-path "genomicsdb/run" \
         --merge-input-intervals \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
-    mkdir $genomicsdb
+    mkdir "genomicsdb/run"
     """
 }
 
@@ -111,7 +111,7 @@ process joint_genotyping {
     echo true
 
     input:
-    val "done" from consolidate_gvcf_status_ch
+    file genomicsdb from genomicsdb_ch
 
     output:
     file "genotyped.vcf" into genotyped_snprecal_ch, genotyped_indelrecal_ch
