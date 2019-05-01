@@ -291,11 +291,11 @@ process apply_vqsr_indels {
 
     input:
     file vcf from indels_apply_ch
+    file recal_table from indels_recal_table_ch
+    file trances_table from indels_trances_table_ch
 
     output:
     file "indels_recal.vcf" into recalibrated_indels_ch
-    file recal_table from indels_recal_table_ch
-    file trances_table from indels_trances_table_ch
 
     script:
     """
