@@ -17,6 +17,7 @@ params.hapmap = null
 params.threads = null
 params.mem = null
 params.outdir = null
+params.supporting
 params.help = false
 
 // Help message.
@@ -101,6 +102,7 @@ process consolidate_gvcf {
         --merge-input-intervals \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
+    mkdir $genomicsdb
     """
 }
 
@@ -123,6 +125,7 @@ process joint_genotyping {
         -O "genotyped.vcf" \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
+    touch "genotyped.vcf"
     """
 }
 
@@ -136,6 +139,8 @@ The next few processes do variant recalibration. SNPs and indels are recalibrate
 
 // Get a SNP-only VCF file.
 process get_snps {
+    echo true
+
     input:
     file vcf from genotyped_snprecal_ch
 
@@ -145,19 +150,21 @@ process get_snps {
     script:
     """
     mkdir tmp
-    gatk SelectVariants \
+    echo gatk SelectVariants \
         -R $reference_fa \
         -V $vcf \
         -O "snps.vcf" \
         --select-type-to-include SNP \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
+    touch "snps.vcf"
     """
 }
 
 // TODO: do I want the plots from "snps.plots.R" (and "snps.plots.R.pdf")?
 // Generate recalibration and tranches tables for recalibrating the SNP variants in the next step.
 process recalibrate_snps {
+    echo true
     input:
     file vcf from snps_recalibrate_ch
 
@@ -168,7 +175,7 @@ process recalibrate_snps {
     script:
     """
     mkdir tmp
-    gatk VariantRecalibrator \
+    echo gatk VariantRecalibrator \
         -R $reference_fa \
         -V $vcf \
         -resource:hapmap,known=false,training=true,truth=true,prior=15.0 $hapmap \
@@ -183,11 +190,15 @@ process recalibrate_snps {
         --rscript-file "snps.plots.R" \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
+    touch "recal.table"
+    touch "tranches.table"
     """
 }
 
 // Recalibrate SNPs.
 process apply_vqsr_snps {
+    echo true
+
     input:
     file vcf from snps_apply_ch
     file recal_table from snps_recal_table_ch
@@ -199,7 +210,7 @@ process apply_vqsr_snps {
     script:
     """
     mkdir tmp
-    gatk ApplyVQSR \
+    echo gatk ApplyVQSR \
         -R $reference_fa \
         -V $vcf \
         -O "snps_recal.vcf" \
@@ -209,11 +220,14 @@ process apply_vqsr_snps {
         -mode SNP \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
+    touch "snps_recal.vcf"
     """
 }
 
 // Get an indel-only VCF file.
 process get_indels {
+    echo true
+
     input:
     file vcf from genotyped_indelrecal_ch
 
@@ -223,7 +237,7 @@ process get_indels {
     script:
     """
     mkdir tmp
-    gatk SelectVariants \
+    echo gatk SelectVariants \
         -R $reference_fa \
         -V $vcf \
         -O "indels.vcf" \
@@ -234,12 +248,15 @@ process get_indels {
         --select-type-to-include NO_VARIATION
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
+    touch "indels.vcf"
     """
 }
 
 
 // Generate recalibration and tranches tables for recalibrating the indel variants in the next step.
 process recalibrate_indels {
+    echo true
+
     input:
     file vcf from indels_recalibrate_ch
 
@@ -250,7 +267,7 @@ process recalibrate_indels {
     script:
     """
     mkdir tmp
-    gatk VariantRecalibrator \
+    echo gatk VariantRecalibrator \
         -R $reference_fa \
         -V $vcf \
         -resource:mills,known=false,training=true,truth=true,prior=12.0 $mills \
@@ -263,11 +280,15 @@ process recalibrate_indels {
         --rscript-file "plots.plots.R"
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
+    touch "recal.table"
+    touch "tranches.table"
     """
 }
 
 // Realibrate indels.
 process apply_vqsr_indels {
+    echo true
+
     input:
     file vcf from indels_apply_ch
 
@@ -279,7 +300,7 @@ process apply_vqsr_indels {
     script:
     """
     mkdir tmp
-    gatk ApplyVQSR \
+    echo gatk ApplyVQSR \
         -R $reference_fa \
         -V vcf \
         -O "indels_recal.vcf" \
@@ -289,11 +310,14 @@ process apply_vqsr_indels {
         -mode INDEL \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
+    touch "indels_recal.vcf"
     """
 }
 
 // Merge recalibrated SNPs and indels to a single VCF file.
 process merge_snps_indels {
+    echo true
+
     input:
     file indels from recalibrated_indels_ch
     file snps from  recalibrated_snps_ch
@@ -303,10 +327,11 @@ process merge_snps_indels {
 
     script:
     """
-    picard "-Xmx${params.mem}g -Xms${params.mem}g" MergeVcfs \
+    echo picard "-Xmx${params.mem}g -Xms${params.mem}g" MergeVcfs \
         I=$indels \
         I=$snps \
         O="recalibrated.vcf"
+    touch "recalibrated.vcf"
     """
 }
 
@@ -327,6 +352,8 @@ process merge_snps_indels {
 // Consider which filters, if any, to apply.
 // Calculate the genotype posteriors based on all the samples in the VCF.
 process refine_genotypes {
+    echo true
+
     input:
     file vcf from recalibrated_vcf_ch
 
@@ -335,16 +362,19 @@ process refine_genotypes {
 
     script:
     """
-    gatk CalculateGenotypePosteriors \
+    echo gatk CalculateGenotypePosteriors \
         -V $vcf \
         -O "refined.vcf"
     #    -supporting $kGphase3
+    touch "refined.vcf"
     """
 }
 
 // TODO: memory specification?
 // Annotate the VCF with effect prediction. Output some summary stats from the effect prediction as well.
 process annotate_effect {
+    echo true
+
     publishDir "${params.outdir}/variants", pattern: "snpEff_stats.csv", mode: 'copy', overwrite: true
 
     input:
@@ -356,13 +386,15 @@ process annotate_effect {
 
     script:
     """
-    snpEff \
+    echo snpEff \
          -i vcf \
          -o vcf \
          -csvStats "snpEff_stats.csv" \
          hg38 \
          -v \
-         $vcf > "effect_annotated.vcf"
+         $vcf > "effect_annotated.vcf
+    touch "effect_annotated.vcf"
+    touch "snpEff_stats.csv"
     """
 }
 
@@ -388,6 +420,8 @@ process annotate_effect {
 // Add rsid from dbSNP
 // NOTE: VariantAnnotator is still in beta (as of 20th of March 2019).
 process annotate_rsid {
+    echo true
+
     publishDir "${params.outdir}/variants", mode: 'copy', overwrite: true, saveAs: {filename -> "variants.vcf"}
 
     input:
@@ -398,15 +432,18 @@ process annotate_rsid {
 
     script:
     """
-    gatk VariantAnnotator \
+    echo gatk VariantAnnotator \
         -R $reference_fa \
         -V $vcf \
         --dbsnp $dbsnp \
         -O "rsid_annotated.vcf"
+    touch "rsid_annotated.vcf"
     """
 }
 
 process variant_evaluation {
+    echo true
+
     publishDir "${params.outdir}/variants", mode: 'copy', overwrite: true
 
     input:
@@ -420,7 +457,7 @@ process variant_evaluation {
     # VariantEval fails if the output file doesn't already exist. NOTE: this should be fixed in a newer version of GATK, as of the 19th of February 2019.
     echo -n > "variant_eval.table"
 
-    gatk VariantEval \
+    echo gatk VariantEval \
         -R $reference_fa \
         --eval $vcf \
         --output "variant_eval.table" \
@@ -432,5 +469,6 @@ process variant_evaluation {
         --eval-module CompOverlap \
         --eval-module ValidationReport \
         --stratification-module Filter
+    touch "variant_eval.table"
     """
 }
