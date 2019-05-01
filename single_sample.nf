@@ -67,7 +67,7 @@ process align_reads {
     val fastq_path from fastq_paths_ch
 
     output:
-    file "${params.sample}/outs/possorted_bam.bam" into aligned_bam_ch, aligned_bam_copy_ch
+    file "${params.sample}/outs/possorted_bam.bam" into aligned_bam_prepare_ch, aligned_bam_apply_ch
 
     script:
     """
@@ -91,7 +91,7 @@ process prepare_bqsr_table {
     cpus = params.threads
 
     input:
-    file bam from aligned_bam_ch
+    file bam from aligned_bam_prepare_ch
 
     output:
     file 'bqsr.table' into bqsr_table_ch, bqsr_table_copy_ch
@@ -139,10 +139,10 @@ process apply_bqsr {
 
     input:
     file bqsr_table from bqsr_table_copy_ch
-    file bam from aligned_bam_copy_ch
+    file bam from aligned_bam_apply_ch
 
     output:
-    file 'recalibrated.bam' into recalibrated_bam_ch, recalibrated_bam_copy_ch
+    file 'recalibrated.bam' into recalibrated_bam_call_ch, recalibrated_bam_qualimap_ch
     file 'recalibrated.bai' into recalibrated_idx_ch
 
     script:
@@ -167,7 +167,7 @@ process call_sample {
     publishDir "${params.outdir}/gvcf", mode: 'copy', overwrite: true
 
     input:
-    file bam from recalibrated_bam_ch
+    file bam from recalibrated_bam_call_ch
 
     output:
     file "${params.sample}.gvcf" into gvcf_ch
@@ -233,7 +233,7 @@ process qualimap_analysis {
         saveAs: {filename -> "${params.sample}"}
 
     input:
-    file bam from recalibrated_bam_copy_ch
+    file bam from recalibrated_bam_qualimap_ch
 
     output:
     file "qualimap_results" into qualimap_results_ch
