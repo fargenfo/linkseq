@@ -1,9 +1,5 @@
 #!/usr/bin/env nextflow
 
-// TODO:
-// When two processes need the same input, name the output channel of the preceeding
-// process accordingly, for example "effect_vcf_validate_ch" and "effect_vcf_annotate_ch".
-
 
 // Input parameters.
 params.gvcf_path = null
@@ -114,8 +110,8 @@ process joint_genotyping {
     val "done" from consolidate_gvcf_status_ch
 
     output:
-    file "genotyped.vcf" into genotyped_vcf_ch
-    file "genotyped.vcf" into genotyped_vcf_copy_ch
+    file "genotyped.vcf" into genotyped_snprecal_ch
+    file "genotyped.vcf" into genotyped_indelrecal_ch
 
     script:
     """
@@ -140,7 +136,7 @@ The next few processes do variant recalibration. SNPs and indels are recalibrate
 // Get a SNP-only VCF file.
 process get_snps {
     input:
-    file vcf from genotyped_vcf_ch
+    file vcf from genotyped_snprecal_ch
 
     output:
     file "snps.vcf" into snps_ch
@@ -219,7 +215,7 @@ process apply_vqsr_snps {
 // Get an indel-only VCF file.
 process get_indels {
     input:
-    file vcf from genotyped_vcf_copy_ch
+    file vcf from genotyped_indelrecal_ch
 
     output:
     file "indels.vcf" into indels_ch
