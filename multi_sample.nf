@@ -1,5 +1,7 @@
 #!/usr/bin/env nextflow
-
+/*
+Author: Ólavur Mortensen <olavur@fargen.fo>
+*/
 
 // Input parameters.
 params.gvcf_path = null
