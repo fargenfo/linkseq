@@ -110,8 +110,7 @@ process joint_genotyping {
     val "done" from consolidate_gvcf_status_ch
 
     output:
-    file "genotyped.vcf" into genotyped_snprecal_ch
-    file "genotyped.vcf" into genotyped_indelrecal_ch
+    file "genotyped.vcf" into genotyped_snprecal_ch, genotyped_indelrecal_ch
 
     script:
     """
@@ -139,8 +138,7 @@ process get_snps {
     file vcf from genotyped_snprecal_ch
 
     output:
-    file "snps.vcf" into snps_ch
-    file "snps.vcf" into snps_copy_ch
+    file "snps.vcf" into snps_recalibrate_ch, snps_apply_ch
 
     script:
     """
@@ -159,7 +157,7 @@ process get_snps {
 // Generate recalibration and tranches tables for recalibrating the SNP variants in the next step.
 process recalibrate_snps {
     input:
-    file vcf from snps_ch
+    file vcf from snps_recalibrate_ch
 
     output:
     file "recal.table" into snps_recal_table_ch
@@ -189,7 +187,7 @@ process recalibrate_snps {
 // Recalibrate SNPs.
 process apply_vqsr_snps {
     input:
-    file vcf from snps_copy_ch
+    file vcf from snps_apply_ch
     file recal_table from snps_recal_table_ch
     file trances_table from snps_trances_table_ch
 
@@ -218,8 +216,7 @@ process get_indels {
     file vcf from genotyped_indelrecal_ch
 
     output:
-    file "indels.vcf" into indels_ch
-    file "indels.vcf" into indels_copy_ch
+    file "indels.vcf" into indels_recalibrate_ch, indels_apply_ch
 
     script:
     """
@@ -242,7 +239,7 @@ process get_indels {
 // Generate recalibration and tranches tables for recalibrating the indel variants in the next step.
 process recalibrate_indels {
     input:
-    file vcf from indels_ch
+    file vcf from indels_recalibrate_ch
 
     output:
     file "recal.table" into indels_recal_table_ch
@@ -270,7 +267,7 @@ process recalibrate_indels {
 // Realibrate indels.
 process apply_vqsr_indels {
     input:
-    file vcf from indels_copy_ch
+    file vcf from indels_apply_ch
 
     output:
     file "indels_recal.vcf" into recalibrated_indels_ch
@@ -352,8 +349,7 @@ process annotate_effect {
     file vcf from refined_vcf_ch
 
     output:
-    file "effect_annotated.vcf" into effect_vcf_validate_ch
-    file "effect_annotated.vcf" into effect_vcf_annotate_ch
+    file "effect_annotated.vcf" into effect_vcf_validate_ch, effect_vcf_annotate_ch
     file "snpEff_stats.csv" into snpeff_stats_ch
 
     script:
