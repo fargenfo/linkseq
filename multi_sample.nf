@@ -5,7 +5,6 @@ Author: Ólavur Mortensen <olavur@fargen.fo>
 
 // Input parameters.
 params.gvcf_path = null
-params.genomicsdb = null
 params.reference = null
 params.dbsnp = null
 params.targets = null
@@ -34,7 +33,6 @@ if (params.help){
 
 // Make sure necessary input parameters are assigned.
 assert params.gvcf_path != null, 'Input parameter "gvcf_path" cannot be unasigned.'
-assert params.genomicsdb != null, 'Input parameter "genomicsdb" cannot be unasigned.'
 assert params.reference != null, 'Input parameter "reference" cannot be unasigned.'
 assert params.dbsnp != null, 'Input parameter "dbsnp" cannot be unasigned.'
 assert params.mills != null, 'Input parameter "mills" cannot be unasigned.'
@@ -50,7 +48,6 @@ assert params.outdir != null, 'Input parameter "outdir" cannot be unasigned.'
 println "P I P E L I N E     I P U T S    "
 println "================================="
 println "gvcf_path          : ${params.gvcf_path}"
-println "genomicsdb         : ${params.genomicsdb}"
 println "reference          : ${params.reference}"
 println "dbsnp              : ${params.dbsnp}"
 println "mills              : ${params.mills}"
@@ -64,7 +61,6 @@ println "mem                : ${params.mem}"
 println "outdir             : ${params.outdir}"
 
 // Get file handlers for input files.
-genomicsdb = file(params.genomicsdb)
 reference = file(params.reference)  // Directory of 10x reference.
 reference_fa = file(params.reference + '/fasta/genome.fa')  // Reference fasta file.
 dbsnp = file(params.dbsnp)
