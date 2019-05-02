@@ -16,7 +16,7 @@ params.hapmap = null
 params.threads = null
 params.mem = null
 params.outdir = null
-arams.help = false
+params.help = false
 
 // Help message.
 helpMessage = """
