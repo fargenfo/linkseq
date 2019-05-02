@@ -72,26 +72,24 @@ omni = file(params.omni)
 hapmap = file(params.hapmap)
 targets = file(params.targets)
 
-gvcf_paths_ch = Channel.fromPath(params.gvcf_path + "/*.gvcf")
-gvcf_arg_ch = gvcf_paths_ch.map { "-V " + it }
+gvcf_paths = file(params.gvcf_path + "/*.gvcf")
+    .collect {"-V " + it}
+    .join(' ')
+
 
 // Consolidate the GVCFs with a "genomicsdb" database, so that we are ready for joint genotyping.
 process consolidate_gvcf {
     echo true
 
-    input:
-    val gvcf_arg from gvcf_arg_ch.toList()
-
     output:
     file "genomicsdb/run" into genomicsdb_ch
 
     script:
-    gvcf_arg_str = (gvcf_arg as List).join(' ')
     """
     mkdir tmp
     export TILEDB_DISABLE_FILE_LOCKING=1
     echo gatk GenomicsDBImport \
-        $gvcf_arg_str \
+        $gvcf_paths \
         -L $targets \
         --genomicsdb-workspace-path "genomicsdb/run" \
         --merge-input-intervals \
