@@ -16,8 +16,7 @@ params.hapmap = null
 params.threads = null
 params.mem = null
 params.outdir = null
-params.supporting
-params.help = false
+arams.help = false
 
 // Help message.
 helpMessage = """
@@ -64,7 +63,7 @@ println "outdir             : ${params.outdir}"
 reference = file(params.reference)  // Directory of 10x reference.
 reference_fa = file(params.reference + '/fasta/genome.fa')  // Reference fasta file.
 dbsnp = file(params.dbsnp)
-mill = file(params.mills)
+mills = file(params.mills)
 kGphase1 = file(params.kGphase1)
 // NOTE: 1000 Genomes phase 3 is not used anywhere at the moment, but could be used
 // in CalculateGenotypePosteriors.
@@ -98,7 +97,7 @@ process consolidate_gvcf {
         --merge-input-intervals \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
-    mkdir "genomicsdb/run"
+    mkdir -p "genomicsdb/run"
     """
 }
 
@@ -166,7 +165,7 @@ process recalibrate_snps {
 
     output:
     file "recal.table" into snps_recal_table_ch
-    file "trances.table" into snps_trances_table_ch
+    file "tranches.table" into snps_trances_table_ch
 
     script:
     """
@@ -198,7 +197,7 @@ process apply_vqsr_snps {
     input:
     file vcf from snps_apply_ch
     file recal_table from snps_recal_table_ch
-    file trances_table from snps_trances_table_ch
+    file tranches_table from snps_trances_table_ch
 
     output:
     file "snps_recal.vcf" into recalibrated_snps_ch
@@ -241,7 +240,7 @@ process get_indels {
         --select-type-to-include MIXED \
         --select-type-to-include MNP \
         --select-type-to-include SYMBOLIC \
-        --select-type-to-include NO_VARIATION
+        --select-type-to-include NO_VARIATION \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
     touch "indels.vcf"
@@ -258,7 +257,7 @@ process recalibrate_indels {
 
     output:
     file "recal.table" into indels_recal_table_ch
-    file "trances.table" into indels_trances_table_ch
+    file "tranches.table" into indels_trances_table_ch
 
     script:
     """
@@ -273,7 +272,7 @@ process recalibrate_indels {
         --max-gaussians 4 \
         -O "recal.table" \
         --tranches-file "tranches.table" \
-        --rscript-file "plots.plots.R"
+        --rscript-file "plots.plots.R" \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
     touch "recal.table"
@@ -288,7 +287,7 @@ process apply_vqsr_indels {
     input:
     file vcf from indels_apply_ch
     file recal_table from indels_recal_table_ch
-    file trances_table from indels_trances_table_ch
+    file tranches_table from indels_trances_table_ch
 
     output:
     file "indels_recal.vcf" into recalibrated_indels_ch
@@ -388,7 +387,7 @@ process annotate_effect {
          -csvStats "snpEff_stats.csv" \
          hg38 \
          -v \
-         $vcf > "effect_annotated.vcf
+         $vcf > "effect_annotated.vcf"
     touch "effect_annotated.vcf"
     touch "snpEff_stats.csv"
     """
@@ -424,7 +423,7 @@ process annotate_rsid {
     file vcf from effect_vcf_annotate_ch
 
     output:
-    file "rsid_annotated.vcf" rsid_annotated_vcf_ch
+    file "rsid_annotated.vcf" into rsid_annotated_vcf_ch
 
     script:
     """
