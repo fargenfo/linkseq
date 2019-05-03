@@ -80,7 +80,7 @@ gvcf_paths = file(params.gvcf_path + "/*.g.vcf")
 // Consolidate the GVCFs with a "genomicsdb" database, so that we are ready for joint genotyping.
 process consolidate_gvcf {
     output:
-    file "genomicsdb/run" into genomicsdb_ch
+    file "genomicsdb" into genomicsdb_ch
 
     script:
     """
@@ -89,11 +89,11 @@ process consolidate_gvcf {
     gatk GenomicsDBImport \
         $gvcf_paths \
         -L $targets \
-        --genomicsdb-workspace-path "genomicsdb/run" \
+        --genomicsdb-workspace-path "genomicsdb" \
         --merge-input-intervals \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
-    //mkdir -p "genomicsdb/run"
+    //mkdir -p "genomicsdb
     """
 }
 
