@@ -170,14 +170,14 @@ process call_sample {
     file bam from recalibrated_bam_call_ch
 
     output:
-    file "${params.sample}.gvcf" into gvcf_ch
+    file "${params.sample}.g.vcf" into gvcf_ch
 
     script:
     """
     mkdir tmp
     gatk HaplotypeCaller  \
         -I $bam \
-        -O "${params.sample}.gvcf" \
+        -O "${params.sample}.g.vcf" \
         -R $reference_fa \
         -L $targets \
         --dbsnp $dbsnp \

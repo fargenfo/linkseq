@@ -73,7 +73,7 @@ hapmap = file(params.hapmap)
 targets = file(params.targets)
 
 // Get a list of GVCFs, and parse them to a format that GenomicsDBImport understands.
-gvcf_paths = file(params.gvcf_path + "/*.gvcf")
+gvcf_paths = file(params.gvcf_path + "/*.g.vcf")
     .collect {"-V " + it}
     .join(' ')
 
