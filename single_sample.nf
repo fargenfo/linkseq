@@ -171,6 +171,7 @@ process call_sample {
 
     output:
     file "${params.sample}.g.vcf" into gvcf_ch
+    file "${params.sample}.g.vcf.idx" into gvcf_idx_ch
 
     script:
     """
