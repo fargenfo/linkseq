@@ -93,7 +93,6 @@ process consolidate_gvcf {
         --merge-input-intervals \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
-    //mkdir -p "genomicsdb
     """
 }
 
@@ -114,7 +113,6 @@ process joint_genotyping {
         -O "genotyped.vcf" \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
-    //touch "genotyped.vcf"
     """
 }
 
@@ -144,7 +142,6 @@ process get_snps {
         --select-type-to-include SNP \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
-    //touch "snps.vcf"
     """
 }
 
@@ -176,8 +173,6 @@ process recalibrate_snps {
         --rscript-file "snps.plots.R" \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
-    //touch "recal.table"
-    //touch "tranches.table"
     """
 }
 
@@ -204,7 +199,6 @@ process apply_vqsr_snps {
         -mode SNP \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
-    //touch "snps_recal.vcf"
     """
 }
 
@@ -230,7 +224,6 @@ process get_indels {
         --select-type-to-include NO_VARIATION \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
-    //touch "indels.vcf"
     """
 }
 
@@ -260,8 +253,6 @@ process recalibrate_indels {
         --rscript-file "plots.plots.R" \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
-    //touch "recal.table"
-    //touch "tranches.table"
     """
 }
 
@@ -280,7 +271,7 @@ process apply_vqsr_indels {
     mkdir tmp
     gatk ApplyVQSR \
         -R $reference_fa \
-        -V vcf \
+        -V $vcf \
         -O "indels_recal.vcf" \
         --truth-sensitivity-filter-level 99.0 \
         --tranches-file $tranches_table \
@@ -288,7 +279,6 @@ process apply_vqsr_indels {
         -mode INDEL \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
-    //touch "indels_recal.vcf"
     """
 }
 
@@ -307,7 +297,6 @@ process merge_snps_indels {
         I=$indels \
         I=$snps \
         O="recalibrated.vcf"
-    //touch "recalibrated.vcf"
     """
 }
 
@@ -340,7 +329,6 @@ process refine_genotypes {
         -V $vcf \
         -O "refined.vcf"
     #    -supporting $kGphase3
-    //touch "refined.vcf"
     """
 }
 
@@ -365,8 +353,6 @@ process annotate_effect {
          hg38 \
          -v \
          $vcf > "effect_annotated.vcf"
-    //touch "effect_annotated.vcf"
-    //touch "snpEff_stats.csv"
     """
 }
 
@@ -407,7 +393,6 @@ process annotate_rsid {
         -V $vcf \
         --dbsnp $dbsnp \
         -O "rsid_annotated.vcf"
-    //touch "rsid_annotated.vcf"
     """
 }
 
@@ -437,6 +422,5 @@ process variant_evaluation {
         --eval-module CompOverlap \
         --eval-module ValidationReport \
         --stratification-module Filter
-    //touch "variant_eval.table"
     """
 }
