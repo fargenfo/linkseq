@@ -227,7 +227,7 @@ process get_indels {
     """
 }
 
-
+// TODO: use --trust-all-polymorphic?
 // Generate recalibration and tranches tables for recalibrating the indel variants in the next step.
 process recalibrate_indels {
     input:
@@ -293,10 +293,13 @@ process merge_snps_indels {
 
     script:
     """
-    picard "-Xmx${params.mem}g -Xms${params.mem}g" MergeVcfs \
-        I=$indels \
-        I=$snps \
-        O="recalibrated.vcf"
+    mkdir tmp
+    gatk MergeVcfs \
+        -I $indels \
+        -I $snps \
+        -O "recalibrated.vcf" \
+        --TMP_DIR tmp \
+        --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
     """
 }
 
