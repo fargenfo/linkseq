@@ -191,7 +191,7 @@ process apply_vqsr_indels {
     input:
     //file vcf from indels_apply_ch
     file vcf from genotyped_applyrecal_ch
-    set file("recal.table"), file("recal.table.idx") from indels_recal_table_ch
+    set file(recal_table), file(recal_table_idx) from indels_recal_table_ch
     file tranches_table from indels_trances_table_ch
 
     output:
@@ -206,7 +206,7 @@ process apply_vqsr_indels {
         -O "indels_recal.vcf" \
         --truth-sensitivity-filter-level 99.0 \
         --tranches-file $tranches_table \
-        --recal-file "recal.table" \
+        --recal-file $recal_table \
         -mode INDEL \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
@@ -218,7 +218,7 @@ process apply_vqsr_snps {
     input:
     //file vcf from snps_apply_ch
     file vcf from recalibrated_indels_ch
-    set file("recal.table"), file("recal.table.idx") from snps_recal_table_ch
+    set file(recal_table), file(recal_table_idx) from snps_recal_table_ch
     file tranches_table from snps_trances_table_ch
 
     output:
@@ -233,7 +233,7 @@ process apply_vqsr_snps {
         -O "recalibrated.vcf" \
         --truth-sensitivity-filter-level 99.0 \
         --tranches-file $tranches_table \
-        --recal-file "recal.table" \
+        --recal-file $recal_table \
         -mode SNP \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
