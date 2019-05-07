@@ -152,7 +152,7 @@ process recalibrate_snps {
     file vcf from snps_recalibrate_ch
 
     output:
-    file "recal.table" into snps_recal_table_ch
+    set file("recal.table"), file("recal.table.idx") into snps_recal_table_ch
     file "tranches.table" into snps_trances_table_ch
 
     script:
@@ -180,7 +180,7 @@ process recalibrate_snps {
 process apply_vqsr_snps {
     input:
     file vcf from snps_apply_ch
-    file recal_table from snps_recal_table_ch
+    set file("recal.table"), file("recal.table.idx") from snps_recal_table_ch
     file tranches_table from snps_trances_table_ch
 
     output:
@@ -195,7 +195,7 @@ process apply_vqsr_snps {
         -O "snps_recal.vcf" \
         --truth-sensitivity-filter-level 99.0 \
         --tranches-file $tranches_table \
-        --recal-file $recal_table \
+        --recal-file "recal.table" \
         -mode SNP \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
@@ -234,7 +234,7 @@ process recalibrate_indels {
     file vcf from indels_recalibrate_ch
 
     output:
-    file "recal.table" into indels_recal_table_ch
+    set file("recal.table"), file("recal.table.idx") into indels_recal_table_ch
     file "tranches.table" into indels_trances_table_ch
 
     script:
@@ -260,7 +260,7 @@ process recalibrate_indels {
 process apply_vqsr_indels {
     input:
     file vcf from indels_apply_ch
-    file recal_table from indels_recal_table_ch
+    set file("recal.table"), file("recal.table.idx") from indels_recal_table_ch
     file tranches_table from indels_trances_table_ch
 
     output:
@@ -275,7 +275,7 @@ process apply_vqsr_indels {
         -O "indels_recal.vcf" \
         --truth-sensitivity-filter-level 99.0 \
         --tranches-file $tranches_table \
-        --recal-file $recal_table \
+        --recal-file "recal.table" \
         -mode INDEL \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
