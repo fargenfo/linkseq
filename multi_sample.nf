@@ -102,7 +102,7 @@ process joint_genotyping {
     file genomicsdb from genomicsdb_ch
 
     output:
-    file "genotyped.vcf" into genotyped_snprecal_ch, genotyped_indelrecal_ch
+    file "genotyped.vcf" into genotyped_snprecal_ch, genotyped_indelrecal_ch, genotyped_applyrecal_ch
 
     script:
     """
@@ -124,32 +124,12 @@ The next few processes do variant recalibration. SNPs and indels are recalibrate
 // Increasing --max-gaussians may work for larger sample sizes. For two samples, --max-gaussians=4 failed. exoseq uses 4.
 // Filtering with VQSR based on DP is not recommended for exome data. Don't know if I'm currently doing this.
 
-// Get a SNP-only VCF file.
-process get_snps {
-    input:
-    file vcf from genotyped_snprecal_ch
-
-    output:
-    file "snps.vcf" into snps_recalibrate_ch, snps_apply_ch
-
-    script:
-    """
-    mkdir tmp
-    gatk SelectVariants \
-        -R $reference_fa \
-        -V $vcf \
-        -O "snps.vcf" \
-        --select-type-to-include SNP \
-        --tmp-dir=tmp \
-        --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
-    """
-}
-
 // TODO: do I want the plots from "snps.plots.R" (and "snps.plots.R.pdf")?
 // Generate recalibration and tranches tables for recalibrating the SNP variants in the next step.
 process recalibrate_snps {
     input:
-    file vcf from snps_recalibrate_ch
+    //file vcf from snps_recalibrate_ch
+    file vcf from genotyped_snprecal_ch
 
     output:
     set file("recal.table"), file("recal.table.idx") into snps_recal_table_ch
@@ -176,62 +156,12 @@ process recalibrate_snps {
     """
 }
 
-// Recalibrate SNPs.
-process apply_vqsr_snps {
-    input:
-    file vcf from snps_apply_ch
-    set file("recal.table"), file("recal.table.idx") from snps_recal_table_ch
-    file tranches_table from snps_trances_table_ch
-
-    output:
-    file "snps_recal.vcf" into recalibrated_snps_ch
-
-    script:
-    """
-    mkdir tmp
-    gatk ApplyVQSR \
-        -R $reference_fa \
-        -V $vcf \
-        -O "snps_recal.vcf" \
-        --truth-sensitivity-filter-level 99.0 \
-        --tranches-file $tranches_table \
-        --recal-file "recal.table" \
-        -mode SNP \
-        --tmp-dir=tmp \
-        --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
-    """
-}
-
-// Get an indel-only VCF file.
-process get_indels {
-    input:
-    file vcf from genotyped_indelrecal_ch
-
-    output:
-    file "indels.vcf" into indels_recalibrate_ch, indels_apply_ch
-
-    script:
-    """
-    mkdir tmp
-    gatk SelectVariants \
-        -R $reference_fa \
-        -V $vcf \
-        -O "indels.vcf" \
-        --select-type-to-include INDEL \
-        --select-type-to-include MIXED \
-        --select-type-to-include MNP \
-        --select-type-to-include SYMBOLIC \
-        --select-type-to-include NO_VARIATION \
-        --tmp-dir=tmp \
-        --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
-    """
-}
-
 // TODO: use --trust-all-polymorphic?
 // Generate recalibration and tranches tables for recalibrating the indel variants in the next step.
 process recalibrate_indels {
     input:
-    file vcf from indels_recalibrate_ch
+    //file vcf from indels_recalibrate_ch
+    file vcf from genotyped_indelrecal_ch
 
     output:
     set file("recal.table"), file("recal.table.idx") into indels_recal_table_ch
@@ -259,7 +189,8 @@ process recalibrate_indels {
 // Realibrate indels.
 process apply_vqsr_indels {
     input:
-    file vcf from indels_apply_ch
+    //file vcf from indels_apply_ch
+    file vcf from genotyped_applyrecal_ch
     set file("recal.table"), file("recal.table.idx") from indels_recal_table_ch
     file tranches_table from indels_trances_table_ch
 
@@ -282,11 +213,13 @@ process apply_vqsr_indels {
     """
 }
 
-// Merge recalibrated SNPs and indels to a single VCF file.
-process merge_snps_indels {
+// Recalibrate SNPs.
+process apply_vqsr_snps {
     input:
-    file indels from recalibrated_indels_ch
-    file snps from  recalibrated_snps_ch
+    //file vcf from snps_apply_ch
+    file vcf from recalibrated_indels_ch
+    set file("recal.table"), file("recal.table.idx") from snps_recal_table_ch
+    file tranches_table from snps_trances_table_ch
 
     output:
     file "recalibrated.vcf" into recalibrated_vcf_ch
@@ -294,23 +227,18 @@ process merge_snps_indels {
     script:
     """
     mkdir tmp
-    gatk MergeVcfs \
-        -I $indels \
-        -I $snps \
+    gatk ApplyVQSR \
+        -R $reference_fa \
+        -V $vcf \
         -O "recalibrated.vcf" \
-        --TMP_DIR tmp \
+        --truth-sensitivity-filter-level 99.0 \
+        --tranches-file $tranches_table \
+        --recal-file "recal.table" \
+        -mode SNP \
+        --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
     """
 }
-
-// NOTE: old way of merging variants. CombineVariants may not be included in GATK4 in the near future.
-//java -jar $gatk3 -T CombineVariants \
-//    -R $reference \
-//    -V:snps $snps_recal \
-//    -V:indels $indels_recal \
-//    -o recal.vcf \
-//    --genotypemergeoption PRIORITIZE \
-//    --rod_priority_list snps,indels
 
 // TODO:
 // Consider whether to use a supporting dataset. I commented out the "-supporting" argument,
@@ -349,7 +277,7 @@ process annotate_effect {
 
     script:
     """
-    snpEff \
+    snpEff -Xmx${params.mem}g \
          -i vcf \
          -o vcf \
          -csvStats "snpEff_stats.csv" \
@@ -387,7 +315,7 @@ process annotate_rsid {
     file vcf from effect_vcf_annotate_ch
 
     output:
-    file "rsid_annotated.vcf" into rsid_annotated_vcf_ch
+    set file("rsid_annotated.vcf"), file("rsid_annotated.vcf.idx") into rsid_annotated_vcf_ch
 
     script:
     """
@@ -403,7 +331,8 @@ process variant_evaluation {
     publishDir "${params.outdir}/variants", mode: 'copy', overwrite: true
 
     input:
-    file vcf from rsid_annotated_vcf_ch
+    //file vcf from rsid_annotated_vcf_ch
+    set file("rsid_annotated.vcf"), file("rsid_annotated.vcf.idx") from rsid_annotated_vcf_ch
 
     output:
     file "variant_eval.table" into variant_eval_table_ch
@@ -415,7 +344,7 @@ process variant_evaluation {
 
     gatk VariantEval \
         -R $reference_fa \
-        --eval $vcf \
+        --eval "rsid_annotated.vcf" \
         --output "variant_eval.table" \
         --dbsnp $dbsnp \
         -L $targets \
