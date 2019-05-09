@@ -1,0 +1,6 @@
+extra_fn_clean_exts:
+  - type: regex
+    pattern: "_S.*_L.*R.*"
+
+sample_names_ignore:
+  - '*I1*'
