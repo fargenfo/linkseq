@@ -336,6 +336,7 @@ process variant_evaluation {
 
     output:
     file "variant_eval.table" into variant_eval_table_ch
+    val "done" into status_ch
 
     script:
     """
@@ -348,7 +349,7 @@ process variant_evaluation {
         --output "variant_eval.table" \
         --dbsnp $dbsnp \
         -L $targets \
-        -no-ev \
+        -no-ev -no-st \
         --eval-module TiTvVariantEvaluator \
         --eval-module CountVariants \
         --eval-module CompOverlap \
@@ -356,3 +357,21 @@ process variant_evaluation {
         --stratification-module Filter
     """
 }
+
+
+process multiqc {
+    publishDir "${params.outdir}/multiqc", mode: 'copy', overwrite: true
+
+    input:
+    val status from status_ch
+
+    output:
+    file "multiqc_report.html" into multiqc_report_ch
+    file "multiqc_data" into multiqc_data_ch
+
+    script:
+    """
+    multiqc -f ${params.outdir} --config ${params.multiqc_config}
+    """
+}
+
