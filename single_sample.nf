@@ -241,8 +241,13 @@ process qualimap_analysis {
 
     script:
     """
+    # This first line adds two columns to our BED file with target regions, as QualiMap expects these.
+    # The fifth and sixth column are respectively just "0" and ".", which has no information about the
+    # regions.
     awk 'BEGIN{OFS="\\t"}{ if(NR > 2) { print \$1,\$2,\$3,\$4,0,"." } }' $targets > 'targets_6_fields.bed'
+    # Make sure QualiMap doesn't attemt to open a display server.
     unset DISPLAY
+    # Run QualiMap.
     qualimap bamqc \
         -gd HUMAN \
         -bam $bam \
