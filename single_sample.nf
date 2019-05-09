@@ -135,15 +135,15 @@ process apply_bqsr {
     memory = "${params.mem}GB"
     cpus = params.threads
 
-    publishDir "${params.outdir}/bam", mode: 'copy', overwrite: true, saveAs: { filename -> "${params.sample}_$filename" }
+    publishDir "${params.outdir}/bam", mode: 'copy', overwrite: true
 
     input:
     file bqsr_table from bqsr_table_copy_ch
     file bam from aligned_bam_apply_ch
 
     output:
-    file 'recalibrated.bam' into recalibrated_bam_call_ch, recalibrated_bam_qualimap_ch
-    file 'recalibrated.bai' into recalibrated_idx_ch
+    file "${params.sample}.bam" into recalibrated_bam_call_ch, recalibrated_bam_qualimap_ch
+    file "${params.sample}.bai" into recalibrated_idx_ch
 
     script:
     """
@@ -153,7 +153,7 @@ process apply_bqsr {
         -I $bam \
         --bqsr-recal-file $bqsr_table \
         -L $targets \
-        -O 'recalibrated.bam' \
+        -O "${params.sample}.bam" \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
     """
