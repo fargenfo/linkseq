@@ -57,6 +57,7 @@ targets = file(params.targets)
 // Channel for the path to the FASTQ directory.
 fastq_paths_ch = Channel.from(params.fastq_path)
 
+// TODO: point directly to fastq folder
 // Align FASTQ reads to reference with LongRanger ALIGN command.
 // https://support.10xgenomics.com/genome-exome/software/pipelines/latest/advanced/other-pipelines
 process align_reads {
@@ -143,7 +144,7 @@ process apply_bqsr {
 
     output:
     file "${params.sample}.bam" into recalibrated_bam_call_ch, recalibrated_bam_qualimap_ch
-    file "${params.sample}.bai" into recalibrated_idx_ch
+    file "${params.sample}.bam.bai" into recalibrated_idx_ch
 
     script:
     """
@@ -156,6 +157,7 @@ process apply_bqsr {
         -O "${params.sample}.bam" \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
+    mv "${params.sample}.bai" "${params.sample}.bam.bai"
     """
 }
 
@@ -202,6 +204,8 @@ Below we perform QC of data.
 
 // Path to FASTQ files. The first '*' matches the Illumina flowcell ID string.
 fastq_ch = Channel.fromPath("${params.fastq_path}/*/${params.sample}/*.fastq.gz")
+// TODO: point directly to fastq folder
+//fastq_ch = Channel.fromPath("${params.fastq_path}/*.fastq.gz")
 
 // Run FastQC for QC metrics of raw data.
 // Note that FastQC will allocate 250 MB of memory per thread used. Since FastQC is not a bottleneck of
