@@ -6,7 +6,7 @@ Author: Ólavur Mortensen <olavur@fargen.fo>
 // Input parameters.
 params.sample = null
 params.bam = null
-params.gvcf = null
+params.vcf = null
 params.reference = null
 params.targets = null
 params.threads = null
@@ -32,7 +32,7 @@ if (params.help){
 // Make sure necessary input parameters are assigned.
 assert params.sample != null, 'Input parameter "sample" cannot be unasigned.'
 assert params.bam != null, 'Input parameter "bam" cannot be unasigned.'
-assert params.gvcf != null, 'Input parameter "gvcf" cannot be unasigned.'
+assert params.vcf != null, 'Input parameter "vcf" cannot be unasigned.'
 assert params.HapCUT2!= null, 'Input parameter "HapCUT2" cannot be unasigned.'
 assert params.interval != null, 'Input parameter "interval" cannot be unasigned.'
 assert params.reference != null, 'Input parameter "reference" cannot be unasigned.'
@@ -45,7 +45,7 @@ println "P I P E L I N E     I P U T S    "
 println "================================="
 println "sample             : ${params.sample}"
 println "bam                : ${params.bam}"
-println "gvcf               : ${params.gvcf}"
+println "vcf                : ${params.vcf}"
 println "HapCUT2            : ${params.HapCUT2}"
 println "interval           : ${params.interval}"
 println "reference          : ${params.reference}"
@@ -56,7 +56,7 @@ println "outdir             : ${params.outdir}"
 
 // Get file handlers for input files.
 bam = file(params.bam)
-gvcf = file(params.gvcf)
+vcf = file(params.vcf)
 reference = file(params.reference)  // Directory of 10x reference.
 reference_fa = file(params.reference + '/fasta/genome.fa')  // Reference fasta file.
 targets = file(params.targets)
@@ -76,21 +76,20 @@ process make_small_bam {
     """
 }
 
-process genotyping {
-    input:
-    set file(bam), file(bai) from small_bam_genotyping_ch
-
+// FIXME: -L option only for testing
+process get_sample_vcf {
     output:
-    file "genotyped.vcf" into vcf_extract_ch, vcf_link_ch, vcf_phase_ch
+    file "sample.vcf" into vcf_extract_ch, vcf_link_ch, vcf_phase_ch
 
     script:
     """
     mkdir tmp
-    gatk GenotypeGVCFs \
-        -V $gvcf \
+    gatk SelectVariants \
+        -V $vcf \
         -R $reference_fa \
-        --intervals $params.interval \
-        -O "genotyped.vcf" \
+        -sn ${params.sample} \
+        -L ${params.interval} \
+        -O "sample.vcf" \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
     """
@@ -184,6 +183,26 @@ process haplotag_bam {
 //    script:
 //    """
 //    whatshap phase --ignore-read-groups --reference $reference_fa --indels -o $vcf $phased_vcf
+//    """
+//}
+
+//process genotyping {
+//    input:
+//    set file(bam), file(bai) from small_bam_genotyping_ch
+//
+//    output:
+//    file "genotyped.vcf" into vcf_extract_ch, vcf_link_ch, vcf_phase_ch
+//
+//    script:
+//    """
+//    mkdir tmp
+//    gatk GenotypeGVCFs \
+//        -V $gvcf \
+//        -R $reference_fa \
+//        --intervals $params.interval \
+//        -O "genotyped.vcf" \
+//        --tmp-dir=tmp \
+//        --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
 //    """
 //}
 
