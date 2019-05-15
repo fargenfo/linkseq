@@ -309,13 +309,13 @@ process annotate_effect {
 // Add rsid from dbSNP
 // NOTE: VariantAnnotator is still in beta (as of 20th of March 2019).
 process annotate_rsid {
-    publishDir "${params.outdir}/variants", mode: 'copy', overwrite: true, saveAs: {filename -> "variants.vcf"}
+    publishDir "${params.outdir}/variants", mode: 'copy', overwrite: true
 
     input:
     file vcf from effect_vcf_annotate_ch
 
     output:
-    set file("rsid_annotated.vcf"), file("rsid_annotated.vcf.idx") into rsid_annotated_vcf_ch
+    set file("variants.vcf"), file("variants.vcf.idx") into rsid_annotated_vcf_ch
 
     script:
     """
@@ -323,7 +323,7 @@ process annotate_rsid {
         -R $reference_fa \
         -V $vcf \
         --dbsnp $dbsnp \
-        -O "rsid_annotated.vcf"
+        -O "variants.vcf"
     """
 }
 
