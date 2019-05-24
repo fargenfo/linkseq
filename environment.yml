@@ -17,9 +17,10 @@ dependencies:
   - bioconda::nextflow=19.04.0
   - bioconda::snpeff=4.3.1t
   - bioconda::multiqc=1.7
-  #- bioconda::samtools=1.9
   - bioconda::bcftools=1.9
   - bioconda::whatshap=0.18
+  - bioconda::tabix=0.2.6
+  - bioconda::perl-vcftools-vcf=0.1.16
   - conda-forge::r-gsalib=2.1
   - conda-forge::r-gplots=3.0.1.1
   - conda-forge::r-ggplot2=3.1.1
