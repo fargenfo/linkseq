@@ -4,13 +4,17 @@
 
 **TODO:**
 
+* Accept CSV and run everything multi-sample
+* Make sure all the sample names match. For example, if the sample names in the genotyped VCF don't match the sample names of the BAM (either folder name or as defined in the read group), I may have problems joining channels by sample name.
+    * The best way is to have all the relevant files to be named {sample}.{extension}, e.g. "sample1.bam", and have the headers, read groups, etc., reflect that (so changing these if necessary).
 * Help strings
 * Each process should be allocated only as much memory as it needs. Profile the workflow to see the memory consumption
 * Always output index files a la 'set file("1.vcf"), file("1.vcf.idx") into variants_ch'
 * Dockerize
 * Phase VCF with HapCut2
+    * Pretty much done. Check results.
 * Phase BAM with WhatsHap using phased VCF
-* Use CRAM. Most likely just use BAM all the way through, convert to CRAM at the end, and delete all intermediate files
+* Use CRAM. Most likely just use BAM all the way through and convert to CRAM at the end
 * Parameter checking:
     * Check that the FASTQ path exists
     * Check that the FASTQ path has data
