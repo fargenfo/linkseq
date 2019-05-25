@@ -4,8 +4,7 @@ Author: Ólavur Mortensen <olavur@fargen.fo>
 */
 
 // Input parameters.
-params.sample = null
-params.fastq_path = null
+params.fastq_paths = null
 params.reference = null
 params.dbsnp = null
 params.targets = null
@@ -28,8 +27,7 @@ if (params.help){
 }
 
 // Make sure necessary input parameters are assigned.
-assert params.sample != null, 'Input parameter "sample" cannot be unasigned.'
-assert params.fastq_path != null, 'Input parameter "fastq_path" cannot be unasigned.'
+assert params.fastq_paths != null, 'Input parameter "fastq_paths" cannot be unasigned.'
 assert params.reference != null, 'Input parameter "reference" cannot be unasigned.'
 assert params.dbsnp != null, 'Input parameter "dbsnp" cannot be unasigned.'
 assert params.targets != null, 'Input parameter "targets" cannot be unasigned.'
@@ -39,8 +37,7 @@ assert params.outdir != null, 'Input parameter "outdir" cannot be unasigned.'
 
 println "P I P E L I N E     I P U T S    "
 println "================================="
-println "sample             : ${params.sample}"
-println "fastq_path         : ${params.fastq_path}"
+println "fastq_paths         : ${params.fastq_paths}"
 println "reference          : ${params.reference}"
 println "dbsnp              : ${params.dbsnp}"
 println "targets            : ${params.targets}"
@@ -54,8 +51,18 @@ reference_fa = file(params.reference + '/fasta/genome.fa')  // Reference fasta f
 dbsnp = file(params.dbsnp)
 targets = file(params.targets)
 
+// Turn the file with FASTQ paths into a channel with [sample, path] tuples.
+fastq_paths_ch = Channel.fromPath(params.fastq_paths)
+fastq_paths_ch
+    .splitCsv(header: true)
+    .map { it -> tuple(it.sample, it.fastq_path) }
+    .into { fastq_align_ch; fastq_print_ch; fastq_qc_ch }
+
+println("Processing data:\nSample\tFASTQ path")
+fastq_print_ch.subscribe { println(it[0] + "\t" + it[1]) }
+
 // Channel for the path to the FASTQ directory.
-fastq_paths_ch = Channel.from(params.fastq_path)
+//fastq_paths_ch = Channel.from(params.fastq_path)
 
 // TODO: point directly to fastq folder
 // Align FASTQ reads to reference with LongRanger ALIGN command.
@@ -65,20 +72,22 @@ process align_reads {
     cpus = params.threads
 
     input:
-    val fastq_path from fastq_paths_ch
+    //val fastq_path from fastq_align_ch
+    set sample, fastq_path from fastq_align_ch
 
     output:
-    file "${params.sample}/outs/possorted_bam.bam" into aligned_bam_prepare_ch, aligned_bam_apply_ch
+    set sample, file("$sample/outs/possorted_bam.bam"), file("$sample/outs/possorted_bam.bam.bai") into aligned_bam_prepare_ch, aligned_bam_apply_ch
 
     script:
     """
-    longranger align --id=${params.sample} --sample=${params.sample} \
+    longranger align --id=$sample --sample=$sample \
         --reference=$reference \
         --fastqs=$fastq_path \
         --localcores=${params.threads} \
         --localmem=${params.mem}
     """
 }
+
 
 /*
 The next three processes, prepare_bqsr_table, analyze_covariates, and apply_bqsr, deal with base quality score
@@ -92,10 +101,10 @@ process prepare_bqsr_table {
     cpus = params.threads
 
     input:
-    file bam from aligned_bam_prepare_ch
+    set sample, file(bam) from aligned_bam_prepare_ch
 
     output:
-    file 'bqsr.table' into bqsr_table_ch, bqsr_table_copy_ch
+    set sample, file('bqsr.table') into bqsr_table_ch, bqsr_table_copy_ch
 
     script:
     """
@@ -115,13 +124,13 @@ process analyze_covariates {
     memory = "${params.mem}GB"
     cpus = params.threads
 
-    publishDir "${params.outdir}/bam/analyze_covariates", mode: 'copy', overwrite: true, saveAs: { filename -> "${params.sample}_$filename" }
+    publishDir "${params.outdir}/bam/analyze_covariates", mode: 'copy', overwrite: true, saveAs: { filename -> "${sample}_$filename" }
 
     input:
-    file bqsr_table from bqsr_table_ch
+    set sample, file(bqsr_table) from bqsr_table_ch
 
     output:
-    file 'AnalyzeCovariates.pdf' into bqsr_analysis_ch
+    set sample, file('AnalyzeCovariates.pdf') into bqsr_analysis_ch
 
     script:
     """
@@ -139,12 +148,11 @@ process apply_bqsr {
     publishDir "${params.outdir}/bam", mode: 'copy', overwrite: true
 
     input:
-    file bqsr_table from bqsr_table_copy_ch
-    file bam from aligned_bam_apply_ch
+    set sample, file(bqsr_table) from bqsr_table_copy_ch
+    set sample, file(bam) from aligned_bam_apply_ch
 
     output:
-    file "${params.sample}.bam" into recalibrated_bam_call_ch, recalibrated_bam_qualimap_ch
-    file "${params.sample}.bam.bai" into recalibrated_idx_ch
+    set sample, file("${sample}.bam"), file("${sample}.bam.bai") into recalibrated_bam_call_ch, recalibrated_bam_qualimap_ch
 
     script:
     """
@@ -154,10 +162,10 @@ process apply_bqsr {
         -I $bam \
         --bqsr-recal-file $bqsr_table \
         -L $targets \
-        -O "${params.sample}.bam" \
+        -O "${sample}.bam" \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
-    mv "${params.sample}.bai" "${params.sample}.bam.bai"
+    mv "${sample}.bai" "${sample}.bam.bai"
     """
 }
 
@@ -169,18 +177,17 @@ process call_sample {
     publishDir "${params.outdir}/gvcf", mode: 'copy', overwrite: true
 
     input:
-    file bam from recalibrated_bam_call_ch
+    set sample, file(bam), file(bai) from recalibrated_bam_call_ch
 
     output:
-    file "${params.sample}.g.vcf" into gvcf_ch
-    file "${params.sample}.g.vcf.idx" into gvcf_idx_ch
+    set sample, file("${sample}.g.vcf"), file("${sample}.g.vcf.idx") into gvcf_ch
 
     script:
     """
     mkdir tmp
     gatk HaplotypeCaller  \
         -I $bam \
-        -O "${params.sample}.g.vcf" \
+        -O "${sample}.g.vcf" \
         -R $reference_fa \
         -L $targets \
         --dbsnp $dbsnp \
@@ -203,31 +210,32 @@ Below we perform QC of data.
 */
 
 // Path to FASTQ files. The first '*' matches the Illumina flowcell ID string.
-fastq_ch = Channel.fromPath("${params.fastq_path}/*/${params.sample}/*.fastq.gz")
+//fastq_ch = Channel.fromPath("${params.fastq_path}/*/${sample}/*.fastq.gz")
 // TODO: point directly to fastq folder
 //fastq_ch = Channel.fromPath("${params.fastq_path}/*.fastq.gz")
 
+// TODO: parse the fastq_qc_ch channel to work as input for this process.
 // Run FastQC for QC metrics of raw data.
 // Note that FastQC will allocate 250 MB of memory per thread used. Since FastQC is not a bottleneck of
 // this pipeline, it will be run with a single thread.
-process fastqc_analysis {
-    publishDir "${params.outdir}/fastqc/${params.sample}", mode: 'copy',
-        saveAs: {filename -> filename.indexOf(".zip") > 0 ? "zips/$filename" : "$filename"}
-
-    input:
-    val fastq_list from fastq_ch.toList()
-
-    output:
-    file '*.{zip,html}' into fastqc_report_ch
-    file '.command.out' into fastqc_stdout_ch
-
-    script:
-    fastqs = (fastq_list as List).join(' ')
-    """
-    mkdir tmp
-    fastqc -q --dir tmp --outdir . $fastqs
-    """
-}
+//process fastqc_analysis {
+//    publishDir "${params.outdir}/fastqc/${sample}", mode: 'copy',
+//        saveAs: {filename -> filename.indexOf(".zip") > 0 ? "zips/$filename" : "$filename"}
+//
+//    input:
+//    val fastq_list from fastq_ch.toList()
+//
+//    output:
+//    file '*.{zip,html}' into fastqc_report_ch
+//    file '.command.out' into fastqc_stdout_ch
+//
+//    script:
+//    fastqs = (fastq_list as List).join(' ')
+//    """
+//    mkdir tmp
+//    fastqc -q --dir tmp --outdir . $fastqs
+//    """
+//}
 
 // Run Qualimap for QC metrics of aligned and recalibrated BAM.
 process qualimap_analysis {
@@ -235,13 +243,13 @@ process qualimap_analysis {
     cpus = params.threads
 
     publishDir "${params.outdir}/bamqc", mode: 'copy',
-        saveAs: {filename -> "${params.sample}"}
+        saveAs: {filename -> "$sample"}
 
     input:
-    file bam from recalibrated_bam_qualimap_ch
+    set sample, file(bam), file(bai) from recalibrated_bam_qualimap_ch
 
     output:
-    file "qualimap_results" into qualimap_results_ch
+    set sample, file("qualimap_results") into qualimap_results_ch
 
     script:
     """
