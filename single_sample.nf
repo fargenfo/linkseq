@@ -88,6 +88,24 @@ process align_reads {
     """
 }
 
+process make_small_bam {
+    input:
+    set sample, file(bam), file(bai) from aligned_bam_prepare_ch
+
+    output:
+    //set file("small.bam"), file("small.bam.bai") into small_bam_genotyping_ch, small_bam_extract_ch, small_bam_link_ch, small_bam_phase_bam_ch
+    set sample, file("small.bam"), file("small.bam.bai") into small_bam_ch
+
+    script:
+    """
+    samtools view -b -o "small.bam" -T $reference_fa $bam "chr17:43000000-43500000"
+    samtools index -b "small.bam"
+    """
+}
+
+aligned_bam_prepare_ch = null
+aligned_bam_apply_ch = null
+small_bam_ch.into { aligned_bam_prepare_ch; aligned_bam_apply_ch }
 
 /*
 The next three processes, prepare_bqsr_table, analyze_covariates, and apply_bqsr, deal with base quality score
@@ -101,7 +119,7 @@ process prepare_bqsr_table {
     cpus = params.threads
 
     input:
-    set sample, file(bam) from aligned_bam_prepare_ch
+    set sample, file(bam), file(bai) from aligned_bam_prepare_ch
 
     output:
     set sample, file('bqsr.table') into bqsr_table_ch, bqsr_table_copy_ch
@@ -140,6 +158,9 @@ process analyze_covariates {
     """
 }
 
+// Pair the BAM and the BQSR table in one "set" channel.
+data_apply_bqsr_ch = aligned_bam_apply_ch.join(bqsr_table_copy_ch)
+
 // Apply recalibration to BAM file.
 process apply_bqsr {
     memory = "${params.mem}GB"
@@ -148,8 +169,9 @@ process apply_bqsr {
     publishDir "${params.outdir}/bam", mode: 'copy', overwrite: true
 
     input:
-    set sample, file(bqsr_table) from bqsr_table_copy_ch
-    set sample, file(bam) from aligned_bam_apply_ch
+    //set sample, file(bqsr_table) from bqsr_table_copy_ch
+    //set sample, file(bam), file(bai) from aligned_bam_apply_ch
+    set sample, file(bam), file(bai), file(bqsr_table) from data_apply_bqsr_ch
 
     output:
     set sample, file("${sample}.bam"), file("${sample}.bam.bai") into recalibrated_bam_call_ch, recalibrated_bam_qualimap_ch
@@ -168,6 +190,12 @@ process apply_bqsr {
     mv "${sample}.bai" "${sample}.bam.bai"
     """
 }
+
+// FIXME:
+// replace this line:
+//        -L "chr17:43000000-43500000" \
+// with
+//        -L $targets \
 
 // Call variants in sample with HapltypeCaller, yielding a GVCF.
 process call_sample {
@@ -189,7 +217,7 @@ process call_sample {
         -I $bam \
         -O "${sample}.g.vcf" \
         -R $reference_fa \
-        -L $targets \
+        -L "chr17:43000000-43500000" \
         --dbsnp $dbsnp \
         -ERC GVCF \
         --create-output-variant-index \
