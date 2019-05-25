@@ -4,6 +4,14 @@
 
 **TODO:**
 
+* Use newest version of HapCUT2 from GitHub
+    * Issue with PD format is fixed
+    * No need for fixing header in phase.nf
+* When done testing fix:
+    * single_sample.nf
+        * remove make_small_bam
+        * remove 'targets = "chr17"'
+        * fix qualimap_analysis
 * Make sure all the sample names match. For example, if the sample names in the genotyped VCF don't match the sample names of the BAM (either folder name or as defined in the read group), I may have problems joining channels by sample name.
     * The best way is to have all the relevant files to be named {sample}.{extension}, e.g. "sample1.bam", and have the headers, read groups, etc., reflect that (so changing these if necessary).
 * Help strings
