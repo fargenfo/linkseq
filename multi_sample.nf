@@ -102,7 +102,7 @@ process joint_genotyping {
     file genomicsdb from genomicsdb_ch
 
     output:
-    file "genotyped.vcf" into genotyped_snprecal_ch, genotyped_indelrecal_ch, genotyped_applyrecal_ch
+    set file("genotyped.vcf"), file("genotyped.vcf.idx") into genotyped_snprecal_ch, genotyped_indelrecal_ch, genotyped_applyrecal_ch
 
     script:
     """
@@ -129,7 +129,7 @@ The next few processes do variant recalibration. SNPs and indels are recalibrate
 process recalibrate_snps {
     input:
     //file vcf from snps_recalibrate_ch
-    file vcf from genotyped_snprecal_ch
+    set file(vcf), file(idx) from genotyped_snprecal_ch
 
     output:
     set file("recal.table"), file("recal.table.idx") into snps_recal_table_ch
@@ -161,7 +161,7 @@ process recalibrate_snps {
 process recalibrate_indels {
     input:
     //file vcf from indels_recalibrate_ch
-    file vcf from genotyped_indelrecal_ch
+    set file(vcf), file(idx) from genotyped_indelrecal_ch
 
     output:
     set file("recal.table"), file("recal.table.idx") into indels_recal_table_ch
@@ -190,12 +190,12 @@ process recalibrate_indels {
 process apply_vqsr_indels {
     input:
     //file vcf from indels_apply_ch
-    file vcf from genotyped_applyrecal_ch
+    set file(vcf), file(idx) from genotyped_applyrecal_ch
     set file(recal_table), file(recal_table_idx) from indels_recal_table_ch
     file tranches_table from indels_trances_table_ch
 
     output:
-    file "indels_recal.vcf" into recalibrated_indels_ch
+    set file("indels_recal.vcf"), file("indels_recal.vcf.idx") into recalibrated_indels_ch
 
     script:
     """
@@ -217,12 +217,12 @@ process apply_vqsr_indels {
 process apply_vqsr_snps {
     input:
     //file vcf from snps_apply_ch
-    file vcf from recalibrated_indels_ch
+    set file(vcf), file(idx) from recalibrated_indels_ch
     set file(recal_table), file(recal_table_idx) from snps_recal_table_ch
     file tranches_table from snps_trances_table_ch
 
     output:
-    file "recalibrated.vcf" into recalibrated_vcf_ch
+    set file("recalibrated.vcf"), file("recalibrated.vcf.idx")into recalibrated_vcf_ch
 
     script:
     """
@@ -249,10 +249,10 @@ process apply_vqsr_snps {
 // Calculate the genotype posteriors based on all the samples in the VCF.
 process refine_genotypes {
     input:
-    file vcf from recalibrated_vcf_ch
+    set file(vcf), file(idx) from recalibrated_vcf_ch
 
     output:
-    file "refined.vcf" into refined_vcf_ch
+    set file("refined.vcf"), file("refined.vcf.idx") into refined_vcf_ch
 
     script:
     """
@@ -269,10 +269,10 @@ process annotate_effect {
     publishDir "${params.outdir}/variants", pattern: "snpEff_stats.csv", mode: 'copy', overwrite: true
 
     input:
-    file vcf from refined_vcf_ch
+    set file(vcf), file(idx) from refined_vcf_ch
 
     output:
-    file "effect_annotated.vcf" into effect_vcf_validate_ch, effect_vcf_annotate_ch
+    set file("effect_annotated.vcf"), file("effect_annotated.vcf.idx") into effect_vcf_validate_ch, effect_vcf_annotate_ch
     file "snpEff_stats.csv" into snpeff_stats_ch
 
     script:
@@ -312,7 +312,7 @@ process annotate_rsid {
     publishDir "${params.outdir}/variants", mode: 'copy', overwrite: true
 
     input:
-    file vcf from effect_vcf_annotate_ch
+    set file(vcf), file(idx) from effect_vcf_annotate_ch
 
     output:
     set file("variants.vcf"), file("variants.vcf.idx") into rsid_annotated_vcf_ch
@@ -332,7 +332,7 @@ process variant_evaluation {
 
     input:
     //file vcf from rsid_annotated_vcf_ch
-    set file("rsid_annotated.vcf"), file("rsid_annotated.vcf.idx") from rsid_annotated_vcf_ch
+    set file(vcf), file(idx) from rsid_annotated_vcf_ch
 
     output:
     file "variant_eval.table" into variant_eval_table_ch
@@ -345,7 +345,7 @@ process variant_evaluation {
 
     gatk VariantEval \
         -R $reference_fa \
-        --eval "rsid_annotated.vcf" \
+        --eval $vcf \
         --output "variant_eval.table" \
         --dbsnp $dbsnp \
         -L $targets \
