@@ -237,33 +237,32 @@ process call_sample {
 Below we perform QC of data.
 */
 
-// Path to FASTQ files. The first '*' matches the Illumina flowcell ID string.
-//fastq_ch = Channel.fromPath("${params.fastq_path}/*/${sample}/*.fastq.gz")
-// TODO: point directly to fastq folder
-//fastq_ch = Channel.fromPath("${params.fastq_path}/*.fastq.gz")
+// Prepare input for FastQC. FastQC needs the paths to FASTQ files. Below, we get each path in a list,
+// and then we map the list to a string.
+fastq_qc_ch = fastq_qc_ch
+    .map { tuple(it[0], file(it[1] + "/*.fastq.gz")) }
+    .map { tuple(it[0], it[1].join(' ')) }
 
-// TODO: parse the fastq_qc_ch channel to work as input for this process.
 // Run FastQC for QC metrics of raw data.
 // Note that FastQC will allocate 250 MB of memory per thread used. Since FastQC is not a bottleneck of
 // this pipeline, it will be run with a single thread.
-//process fastqc_analysis {
-//    publishDir "${params.outdir}/fastqc/${sample}", mode: 'copy',
-//        saveAs: {filename -> filename.indexOf(".zip") > 0 ? "zips/$filename" : "$filename"}
-//
-//    input:
-//    val fastq_list from fastq_ch.toList()
-//
-//    output:
-//    file '*.{zip,html}' into fastqc_report_ch
-//    file '.command.out' into fastqc_stdout_ch
-//
-//    script:
-//    fastqs = (fastq_list as List).join(' ')
-//    """
-//    mkdir tmp
-//    fastqc -q --dir tmp --outdir . $fastqs
-//    """
-//}
+process fastqc_analysis {
+    publishDir "${params.outdir}/fastqc/${sample}", mode: 'copy',
+        saveAs: {filename -> filename.indexOf(".zip") > 0 ? "zips/$filename" : "$filename"}
+
+    input:
+    set sample, fastq_list from fastq_qc_ch
+
+    output:
+    set sample, file('*.{zip,html}') into fastqc_report_ch
+    set sample, file('.command.out') into fastqc_stdout_ch
+
+    script:
+    """
+    mkdir tmp
+    fastqc -q --dir tmp --outdir . $fastq_list
+    """
+}
 
 // Run Qualimap for QC metrics of aligned and recalibrated BAM.
 process qualimap_analysis {
