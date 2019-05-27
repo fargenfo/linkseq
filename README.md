@@ -11,13 +11,6 @@
         * fix qualimap_analysis
     * multi_sample.nf
         * remove 'targets = "chr17"'
-* Make sure all the sample names match. For example, if the sample names in the genotyped VCF don't match the sample names of the BAM (either folder name or as defined in the read group), I may have problems joining channels by sample name.
-    * If the sample name in the input FASTQ path CSV doesn't match the read group in the aligned BAM, then rename it in the BAM.
-    * Make this an option, i.e. `param.rename_samples = false` by default.
-    * Issue a warning as well, that the name doesn't match.
-    * If you get this warning, you check that it's not an error but that you do want your samples to have different names.
-    * The workflow prints which samples it has to rename.
-    * The workflow creates a list of the samples it renamed, and includes it in the output directory.
 * Help strings
 * Each process should be allocated only as much memory as it needs. Profile the workflow to see the memory consumption
 * Dockerize
