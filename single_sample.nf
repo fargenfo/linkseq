@@ -51,6 +51,16 @@ reference_fa = file(params.reference + '/fasta/genome.fa')  // Reference fasta f
 dbsnp = file(params.dbsnp)
 targets = file(params.targets)
 
+
+
+// FIXME
+// remove when done testing
+targets = "chr17"
+// FIXME
+
+
+
+
 // Turn the file with FASTQ paths into a channel with [sample, path] tuples.
 fastq_paths_ch = Channel.fromPath(params.fastq_paths)
 fastq_paths_ch
@@ -98,7 +108,7 @@ process make_small_bam {
 
     script:
     """
-    samtools view -b -o "small.bam" -T $reference_fa $bam "chr17:43000000-43500000"
+    samtools view -b -o "small.bam" -T $reference_fa $bam "chr17"
     samtools index -b "small.bam"
     """
 }
@@ -191,12 +201,6 @@ process apply_bqsr {
     """
 }
 
-// FIXME:
-// replace this line:
-//        -L "chr17:43000000-43500000" \
-// with
-//        -L $targets \
-
 // Call variants in sample with HapltypeCaller, yielding a GVCF.
 process call_sample {
     memory = "${params.mem}GB"
@@ -217,7 +221,7 @@ process call_sample {
         -I $bam \
         -O "${sample}.g.vcf" \
         -R $reference_fa \
-        -L "chr17:43000000-43500000" \
+        -L $targets \
         --dbsnp $dbsnp \
         -ERC GVCF \
         --create-output-variant-index \
@@ -264,6 +268,7 @@ process fastqc_analysis {
     """
 }
 
+
 // Run Qualimap for QC metrics of aligned and recalibrated BAM.
 process qualimap_analysis {
     memory = "${params.mem}GB"
@@ -283,7 +288,15 @@ process qualimap_analysis {
     # This first line adds two columns to our BED file with target regions, as QualiMap expects these.
     # The fifth and sixth column are respectively just "0" and ".", which has no information about the
     # regions.
-    awk 'BEGIN{OFS="\\t"}{ if(NR > 2) { print \$1,\$2,\$3,\$4,0,"." } }' $targets > 'targets_6_fields.bed'
+    #awk 'BEGIN{OFS="\\t"}{ if(NR > 2) { print \$1,\$2,\$3,\$4,0,"." } }' $targets > 'targets_6_fields.bed'
+
+    # FIXME:
+    # remove this when done testing.
+    # and uncomment awk command above
+    echo 'track name="dummy" description="dummy BED" color=0,0,128 db=hg38' > 'targets_6_fields.bed'
+    echo 'chr17    1  83257441 allchr17   0   .' >> 'targets_6_fields.bed'
+    # FIXME
+
     # Make sure QualiMap doesn't attemt to open a display server.
     unset DISPLAY
     # Run QualiMap.
