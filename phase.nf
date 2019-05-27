@@ -58,6 +58,7 @@ bam_paths_ch
     .map { it -> [it.sample, file(it.bam_path), file(it.bai_path)] }
     .into { bam_paths_process_ch; bam_paths_check_ch }
 
+// Map this channel to just the sample names.
 bam_sample_names_ch = bam_paths_check_ch.map { it -> it[0] }
 
 // Get file handlers for input files.
@@ -66,10 +67,13 @@ reference = file(params.reference)  // Directory of 10x reference.
 reference_fa = file(params.reference + '/fasta/genome.fa')  // Reference fasta file.
 targets = file(params.targets)
 
+// TODO: this is temporary, HapCUT2 should be installed properly, and this should not be necessary.
 HAPCUT2 = params.HapCUT2 + "/build/HAPCUT2"
 extractHAIRS = params.HapCUT2 + "/build/extractHAIRS"
 LinkFragments = params.HapCUT2 + "/utilities/LinkFragments.py"
 
+// FIXME:
+// this is just for testing
 process make_small_bam {
     input:
     set sample, file(bam), file(bai) from bam_paths_process_ch
@@ -84,6 +88,7 @@ process make_small_bam {
     """
 }
 
+// Extract sample names from VCF.
 process get_sample_names {
     output:
     file "samples.txt" into vcf_sample_names_ch
@@ -115,6 +120,8 @@ vcf_sample_names_ch
 //assert vcf_sn == bam_sn, "error"
 
 // FIXME: -L option only for testing
+// Extract a single sample from the VCF. This process is run once for each sample, splitting the
+// VCF into as many files as there are samples.
 process get_sample_vcf {
     input:
     val sample from vcf_sample_names_split_ch
@@ -140,6 +147,7 @@ process get_sample_vcf {
 // Make a channel with (sample ID, VCF, VCF index, BAM, BAM index) tuples.
 vcf_ch.join(small_bam_ch).into { data_extract_ch; data_link_ch; data_phase_ch }
 
+// Convert BAM file to the compact fragment file format containing only haplotype-relevant information.
 process extract_hairs {
     input:
     set sample, file(vcf), file(idx), file(bam), file(bai) from data_extract_ch
@@ -156,6 +164,7 @@ process extract_hairs {
 // Add unlinked fragment file to tuple for next process.
 data_link_ch = data_link_ch.join(unlinked_fragments_ch)
 
+// Use LinkFragments to link fragments into barcoded molecules.
 process link_fragments {
     input:
     set sample, file(vcf), file(idx), file(bam), file(bai), file(unlinked_fragments) from data_link_ch
@@ -172,6 +181,7 @@ process link_fragments {
 // Add linked fragment file to tuple for next process.
 data_phase_ch = data_phase_ch.join(linked_fragments_ch)
 
+// Use HAPCUT2 to assemble fragment file into haplotype blocks.
 process phase_vcf {
     input:
     set sample, file(vcf), file(idx), file(bam), file(bai), file(linked_fragments) from data_phase_ch
@@ -186,6 +196,8 @@ process phase_vcf {
     """
 }
 
+
+// Compress and index VCF.
 process index_and_zip_vcf {
     input:
     set sample, file(vcf) from phased_vcf_ch
@@ -201,7 +213,7 @@ process index_and_zip_vcf {
     """
 }
 
-
+// Merge VCFs into a multi-sample VCF, and compress and index it.
 process merge_phased_vcf {
     input:
     val vcf_list from phased_vcf_merge_ch.toList()
@@ -222,6 +234,8 @@ process merge_phased_vcf {
 // Take the compressed and indexed VCF from above and join by sample name with BAM files.
 data_haplotag_ch = phased_vcf_haplotag_ch.join(small_bam_haplotag_bam_ch)
 
+// Add haplotype information to BAM, tagging each read with a haplotype (when possible), using
+// the haplotype information from the phased VCF.
 process haplotag_bam {
     input:
     set sample, file(phased_vcf), file(idx), file(bam), file(bai) from data_haplotag_ch
