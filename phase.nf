@@ -176,7 +176,8 @@ process phase_vcf {
 
     output:
     file "haplotypes" into haplotypes_ch
-    set sample, file("haplotypes.phased.VCF") into phased_vcf_get_header_ch, phased_vcf_reheader_ch
+    //set sample, file("haplotypes.phased.VCF") into phased_vcf_get_header_ch, phased_vcf_reheader_ch
+    set sample, file("haplotypes.phased.VCF") into phased_vcf_ch
 
     script:
     """
@@ -184,66 +185,10 @@ process phase_vcf {
     """
 }
 
-// Fix header.
-
-
-process get_header {
-    input:
-    set sample, file(vcf) from phased_vcf_get_header_ch
-
-    output:
-    set sample, file("header.vcf") into header_ch
-
-    script:
-    """
-    bcftools view -h $vcf > "header.vcf"
-    """
-}
-
-process fix_header {
-    input:
-    set sample, file(header) from header_ch
-
-    output:
-    set sample, file("fixed_header.vcf") into fixed_header_ch
-
-    script:
-    """
-    #!/usr/bin/python
-
-    import re
-
-    format_line = '##FORMAT=<ID=PD,Number=1,Type=Integer,Description=" phased Read Depth">'
-    correct_format = '##FORMAT=<ID=PD,Number=1,Type=Integer,Description="phased Read Depth">'
-
-    with open("$header") as fid:
-        header = fid.read()
-
-    fixed_header = re.sub(format_line, correct_format, header)
-
-    with open("fixed_header.vcf", 'w') as fid:
-        fid.write(fixed_header)
-    """
-}
-
-data_reheader_ch = fixed_header_ch.join(phased_vcf_reheader_ch)
-
-process reheader_vcf {
-    input:
-    set sample, file(header), file(vcf) from data_reheader_ch
-
-    output:
-    set sample, file("reheaded.vcf") into vcf_reheaded_ch
-
-    script:
-    """
-    bcftools reheader -h $header -o "reheaded.vcf" $vcf
-    """
-}
-
 process index_and_zip_vcf {
     input:
-    set sample, file(vcf) from vcf_reheaded_ch
+    //set sample, file(vcf) from vcf_reheaded_ch
+    set sample, file(vcf) from phased_vcf_ch
 
     output:
     set sample, file("phased.vcf.gz"), file("phased.vcf.gz.tbi") into phased_vcf_haplotag_ch
