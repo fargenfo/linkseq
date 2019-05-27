@@ -249,19 +249,3 @@ process haplotag_bam {
     """
 }
 
-// NOTE: When we have a VCF phased by HapCUT2, we can apply this haplotype information to
-// a separate VCF using WhatsHap. I do not know how much loss of information there is in
-// this process.
-//process whatshap_phase_vcf {
-//    input:
-//    file vcf from ???
-//    file phased_vcf from ???
-//
-//    output:
-//
-//    script:
-//    """
-//    whatshap phase --ignore-read-groups --reference $reference_fa --indels -o $vcf $phased_vcf
-//    """
-//}
-
