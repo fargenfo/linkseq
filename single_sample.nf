@@ -243,9 +243,25 @@ Below we perform QC of data.
 
 // Prepare input for FastQC. FastQC needs the paths to FASTQ files. Below, we get each path in a list,
 // and then we map the list to a string.
-fastq_qc_ch = fastq_qc_ch
+fastq_concat_ch = fastq_qc_ch
     .map { tuple(it[0], file(it[1] + "/*.fastq.gz")) }
     .map { tuple(it[0], it[1].join(' ')) }
+
+// Concatenate all the FASTQ files of one sample into one FASTQ file. This way, we get only one FastQC
+// report. Also, conveniently, we avoid using the original file names, possibly containing confidiential
+// sample names, in the FastQC report.
+process concat_fastq {
+    input:
+    set sample, fastq_list from fastq_concat_ch
+
+    output:
+    set sample, file("${sample}.fastq.gz") into fastq_fastqc_ch
+
+    script:
+    """
+    zcat $fastq_list | bgzip -c > "${sample}.fastq.gz"
+    """
+}
 
 // Run FastQC for QC metrics of raw data.
 // Note that FastQC will allocate 250 MB of memory per thread used. Since FastQC is not a bottleneck of
@@ -255,7 +271,7 @@ process fastqc_analysis {
         saveAs: {filename -> filename.indexOf(".zip") > 0 ? "zips/$filename" : "$filename"}
 
     input:
-    set sample, fastq_list from fastq_qc_ch
+    set sample, fastq from fastq_fastqc_ch
 
     output:
     set sample, file('*.{zip,html}') into fastqc_report_ch
@@ -264,7 +280,7 @@ process fastqc_analysis {
     script:
     """
     mkdir tmp
-    fastqc -q --dir tmp --outdir . $fastq_list
+    fastqc -q --dir tmp --outdir . $fastq
     """
 }
 
