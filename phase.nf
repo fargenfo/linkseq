@@ -61,7 +61,6 @@ bam_paths_ch = Channel.fromPath(params.bam_paths)
 bam_paths_ch = bam_paths_ch.splitCsv(header: true).map { it -> [it.sample, file(it.bam_path), file(it.bai_path)] }
 
 // Get file handlers for input files.
-//bam = file(params.bam)
 vcf = file(params.vcf)
 reference = file(params.reference)  // Directory of 10x reference.
 reference_fa = file(params.reference + '/fasta/genome.fa')  // Reference fasta file.
@@ -76,7 +75,6 @@ process make_small_bam {
     set sample, file(bam), file(bai) from bam_paths_ch
 
     output:
-    //set file("small.bam"), file("small.bam.bai") into small_bam_genotyping_ch, small_bam_extract_ch, small_bam_link_ch, small_bam_phase_bam_ch
     set sample, file("small.bam"), file("small.bam.bai") into small_bam_ch, small_bam_haplotag_bam_ch
 
     script:
@@ -132,12 +130,9 @@ vcf_ch.join(small_bam_ch).into { data_extract_ch; data_link_ch; data_phase_ch }
 
 process extract_hairs {
     input:
-    //set sample, file(vcf) from vcf_extract_ch
-    //set file(bam), file(bai) from small_bam_extract_ch
     set sample, file(vcf), file(idx), file(bam), file(bai) from data_extract_ch
 
     output:
-    //file "unlinked_fragment" into unlinked_fragments_ch
     set sample, file("unlinked_fragment") into unlinked_fragments_ch
 
     script:
@@ -151,9 +146,6 @@ data_link_ch = data_link_ch.join(unlinked_fragments_ch)
 
 process link_fragments {
     input:
-    //file vcf from vcf_link_ch
-    //set file(bam), file(bai) from small_bam_link_ch
-    //file unlinked_fragments from unlinked_fragments_ch
     set sample, file(vcf), file(idx), file(bam), file(bai), file(unlinked_fragments) from data_link_ch
 
     output:
@@ -170,13 +162,10 @@ data_phase_ch = data_phase_ch.join(linked_fragments_ch)
 
 process phase_vcf {
     input:
-    //file vcf from vcf_phase_ch
-    //file linked_fragments from linked_fragments_ch
     set sample, file(vcf), file(idx), file(bam), file(bai), file(linked_fragments) from data_phase_ch
 
     output:
     file "haplotypes" into haplotypes_ch
-    //set sample, file("haplotypes.phased.VCF") into phased_vcf_get_header_ch, phased_vcf_reheader_ch
     set sample, file("haplotypes.phased.VCF") into phased_vcf_ch
 
     script:
@@ -187,7 +176,6 @@ process phase_vcf {
 
 process index_and_zip_vcf {
     input:
-    //set sample, file(vcf) from vcf_reheaded_ch
     set sample, file(vcf) from phased_vcf_ch
 
     output:
@@ -214,42 +202,16 @@ process merge_phased_vcf {
     vcf_list_str = (vcf_list as List)
         .join(' ')  // Join paths in single string.
     """
-    #vcf-merge $vcf_list_str > "phased_merged.vcf"
     vcf-merge $vcf_list_str | bgzip -c > "phased_merged.vcf.gz"
     tabix "phased_merged.vcf.gz"
     """
 }
-
-
-//process merge_phased_vcf {
-//    echo true
-//    input:
-//    val vcf_list from phased_vcf_merge_ch.toList()
-//
-//    script:
-//    // Prepare input string for MergeVcfs.
-//    vcf_list_str = (vcf_list as List)
-//        .collect({ "-I " + it })  // Prepend path with "-I".
-//        .join(' ')  // Join paths in single string.
-//    """
-//    gatk MergeVcfs \
-//        $vcf_list_str \
-//        -O phased_multisample.vcf \
-//        --TMP_DIR=tmp \
-//        --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
-//    """
-//}
-
-
-
 
 // Take the compressed and indexed VCF from above and join by sample name with BAM files.
 data_haplotag_ch = phased_vcf_haplotag_ch.join(small_bam_haplotag_bam_ch)
 
 process haplotag_bam {
     input:
-    //set file(phased_vcf), file(phased_vcf_idx) from phased_vcf_idx_gz_ch
-    //set file(bam), file(bai) from small_bam_phase_bam_ch
     set sample, file(phased_vcf), file(idx), file(bam), file(bai) from data_haplotag_ch
 
     output:
@@ -277,35 +239,3 @@ process haplotag_bam {
 //    """
 //}
 
-//process genotyping {
-//    input:
-//    set file(bam), file(bai) from small_bam_genotyping_ch
-//
-//    output:
-//    file "genotyped.vcf" into vcf_extract_ch, vcf_link_ch, vcf_phase_ch
-//
-//    script:
-//    """
-//    mkdir tmp
-//    gatk GenotypeGVCFs \
-//        -V $gvcf \
-//        -R $reference_fa \
-//        --intervals $params.interval \
-//        -O "genotyped.vcf" \
-//        --tmp-dir=tmp \
-//        --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
-//    """
-//}
-
-// NOTE: I can make a very simply VCF to phase with mpileup
-// use either -T or -r to restrict analysis to taget regions.
-// -x could make this faster
-//process call_simple_vcf {
-//    output:
-//    file "simple.vcf" into vcf_ch
-//
-//    script:
-//    """
-//    bcftools mpileup -f $reference_fa -o "simple.vcf" -O "v" $bam
-//    """
-//}
