@@ -71,10 +71,6 @@ fastq_paths_ch
 println("Processing data:\nSample\tFASTQ path")
 fastq_print_ch.subscribe { println(it[0] + "\t" + it[1]) }
 
-// Channel for the path to the FASTQ directory.
-//fastq_paths_ch = Channel.from(params.fastq_path)
-
-// TODO: point directly to fastq folder
 // Align FASTQ reads to reference with LongRanger ALIGN command.
 // https://support.10xgenomics.com/genome-exome/software/pipelines/latest/advanced/other-pipelines
 process align_reads {
@@ -82,7 +78,6 @@ process align_reads {
     cpus = params.threads
 
     input:
-    //val fastq_path from fastq_align_ch
     set sample, fastq_path from fastq_align_ch
 
     output:
@@ -103,7 +98,6 @@ process make_small_bam {
     set sample, file(bam), file(bai) from aligned_bam_prepare_ch
 
     output:
-    //set file("small.bam"), file("small.bam.bai") into small_bam_genotyping_ch, small_bam_extract_ch, small_bam_link_ch, small_bam_phase_bam_ch
     set sample, file("small.bam"), file("small.bam.bai") into small_bam_ch
 
     script:
@@ -179,8 +173,6 @@ process apply_bqsr {
     publishDir "${params.outdir}/bam", mode: 'copy', overwrite: true
 
     input:
-    //set sample, file(bqsr_table) from bqsr_table_copy_ch
-    //set sample, file(bam), file(bai) from aligned_bam_apply_ch
     set sample, file(bam), file(bai), file(bqsr_table) from data_apply_bqsr_ch
 
     output:
