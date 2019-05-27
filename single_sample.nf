@@ -244,7 +244,7 @@ Below we perform QC of data.
 // Prepare input for FastQC. FastQC needs the paths to FASTQ files. Below, we get each path in a list,
 // and then we map the list to a string.
 fastq_concat_ch = fastq_qc_ch
-    .map { tuple(it[0], file(it[1] + "/*.fastq.gz")) }
+    .map { tuple(it[0], file(it[1] + "/*.fastq{.gz,}")) }
     .map { tuple(it[0], it[1].join(' ')) }
 
 // Concatenate all the FASTQ files of one sample into one FASTQ file. This way, we get only one FastQC
