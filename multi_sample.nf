@@ -77,6 +77,14 @@ gvcf_paths = file(params.gvcf_path + "/*.g.vcf")
     .collect {"-V " + it}
     .join(' ')
 
+
+// FIXME:
+// remove this when done testing
+targets = "chr17"
+// FIXME
+
+
+
 // Consolidate the GVCFs with a "genomicsdb" database, so that we are ready for joint genotyping.
 process consolidate_gvcf {
     output:
@@ -272,7 +280,7 @@ process annotate_effect {
     set file(vcf), file(idx) from refined_vcf_ch
 
     output:
-    set file("effect_annotated.vcf"), file("effect_annotated.vcf.idx") into effect_vcf_validate_ch, effect_vcf_annotate_ch
+    file "effect_annotated.vcf" into effect_vcf_annotate_ch
     file "snpEff_stats.csv" into snpeff_stats_ch
 
     script:
@@ -312,7 +320,7 @@ process annotate_rsid {
     publishDir "${params.outdir}/variants", mode: 'copy', overwrite: true
 
     input:
-    set file(vcf), file(idx) from effect_vcf_annotate_ch
+    file vcf from effect_vcf_annotate_ch
 
     output:
     set file("variants.vcf"), file("variants.vcf.idx") into rsid_annotated_vcf_ch
