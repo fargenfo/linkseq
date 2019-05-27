@@ -271,13 +271,32 @@ process refine_genotypes {
     """
 }
 
+// Add rsid from dbSNP
+// NOTE: VariantAnnotator is still in beta (as of 20th of March 2019).
+process annotate_rsid {
+    input:
+    set file(vcf), file(idx) from refined_vcf_ch
+
+    output:
+    set file("rsid_ann.vcf"), file("rsid_ann.vcf.idx") into rsid_annotated_vcf_ch
+
+    script:
+    """
+    gatk VariantAnnotator \
+        -R $reference_fa \
+        -V $vcf \
+        --dbsnp $dbsnp \
+        -O "rsid_ann.vcf"
+    """
+}
+
 // TODO: memory specification?
 // Annotate the VCF with effect prediction. Output some summary stats from the effect prediction as well.
 process annotate_effect {
     publishDir "${params.outdir}/variants", pattern: "snpEff_stats.csv", mode: 'copy', overwrite: true
 
     input:
-    set file(vcf), file(idx) from refined_vcf_ch
+    set file(vcf), file(idx) from rsid_annotated_vcf_ch
 
     output:
     file "effect_annotated.vcf" into effect_vcf_annotate_ch
@@ -295,43 +314,39 @@ process annotate_effect {
     """
 }
 
-// TODO: is this step necessary? Perhaps put it at the very end, to make sure the VCF is
-// correctly formatted and such.
-// Validate the VCF sice we used a non-GAKT tool.
-//process validate_vcf {
-//    input:
-//    file vcf from effect_vcf_validate_ch
-//
-//    output:
-//    file ".command.log" into validation_log_ch
-//
-//    script:
-//    """
-//    gatk ValidateVariants \
-//        -V $vcf \
-//        -R $reference_fa \
-//        --dbsnp $dbsnp
-//    """
-//}
-
-// Add rsid from dbSNP
-// NOTE: VariantAnnotator is still in beta (as of 20th of March 2019).
-process annotate_rsid {
+process zip_and_index_vcf {
     publishDir "${params.outdir}/variants", mode: 'copy', overwrite: true
 
     input:
     file vcf from effect_vcf_annotate_ch
 
     output:
-    set file("variants.vcf"), file("variants.vcf.idx") into rsid_annotated_vcf_ch
+    set file("variants.vcf.gz"), file("variants.vcf.gz.tbi") into variants_evaluate_ch, variants_validate_ch
 
     script:
     """
-    gatk VariantAnnotator \
-        -R $reference_fa \
+    cat $vcf | bgzip -c > "variants.vcf.gz"
+    tabix "variants.vcf.gz"
+    """
+}
+
+// TODO: is this step necessary? Perhaps put it at the very end, to make sure the VCF is
+// correctly formatted and such.
+// Validate the VCF sice we used a non-GAKT tool.
+process validate_vcf {
+    publishDir "${params.outdir}/variants", mode: 'copy', overwrite: true, saveAs: { filename -> "validation.log" }
+    input:
+    set file(vcf), file(idx) from variants_validate_ch
+
+    output:
+    file ".command.log" into validation_log_ch
+
+    script:
+    """
+    gatk ValidateVariants \
         -V $vcf \
-        --dbsnp $dbsnp \
-        -O "variants.vcf"
+        -R $reference_fa \
+        --dbsnp $dbsnp
     """
 }
 
@@ -340,7 +355,7 @@ process variant_evaluation {
 
     input:
     //file vcf from rsid_annotated_vcf_ch
-    set file(vcf), file(idx) from rsid_annotated_vcf_ch
+    set file(vcf), file(idx) from variants_evaluate_ch
 
     output:
     file "variant_eval.table" into variant_eval_table_ch
