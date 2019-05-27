@@ -4,23 +4,27 @@
 
 **TODO:**
 
-* Use newest version of HapCUT2 from GitHub
-    * Issue with PD format is fixed
-    * No need for fixing header in phase.nf
 * When done testing fix:
     * single_sample.nf
         * remove make_small_bam
         * remove 'targets = "chr17"'
         * fix qualimap_analysis
+    * multi_sample.nf
+        * remove 'targets = "chr17"'
 * Make sure all the sample names match. For example, if the sample names in the genotyped VCF don't match the sample names of the BAM (either folder name or as defined in the read group), I may have problems joining channels by sample name.
-    * The best way is to have all the relevant files to be named {sample}.{extension}, e.g. "sample1.bam", and have the headers, read groups, etc., reflect that (so changing these if necessary).
+    * If the sample name in the input FASTQ path CSV doesn't match the read group in the aligned BAM, then rename it in the BAM.
+    * Make this an option, i.e. `param.rename_samples = false` by default.
+    * Issue a warning as well, that the name doesn't match.
+    * If you get this warning, you check that it's not an error but that you do want your samples to have different names.
+    * The workflow prints which samples it has to rename.
+    * The workflow creates a list of the samples it renamed, and includes it in the output directory.
 * Help strings
 * Each process should be allocated only as much memory as it needs. Profile the workflow to see the memory consumption
 * Dockerize
 * Phase VCF with HapCut2
     * Pretty much done. Check results.
-* Phase BAM with WhatsHap using phased VCF
 * Use CRAM. Most likely just use BAM all the way through and convert to CRAM at the end
+* Align reads with Lariat
 * Parameter checking:
     * Check that the FASTQ path exists
     * Check that the FASTQ path has data
