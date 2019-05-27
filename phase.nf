@@ -4,7 +4,6 @@ Author: Ólavur Mortensen <olavur@fargen.fo>
 */
 
 // Input parameters.
-//params.sample = null
 params.bam_paths = null
 params.vcf = null
 params.reference = null
@@ -30,8 +29,6 @@ if (params.help){
 }
 
 // Make sure necessary input parameters are assigned.
-//assert params.sample != null, 'Input parameter "sample" cannot be unasigned.'
-//assert params.bam != null, 'Input parameter "bam" cannot be unasigned.'
 assert params.bam_paths != null, 'Input parameter "bam_paths" cannot be unasigned.'
 assert params.vcf != null, 'Input parameter "vcf" cannot be unasigned.'
 assert params.HapCUT2!= null, 'Input parameter "HapCUT2" cannot be unasigned.'
@@ -44,8 +41,6 @@ assert params.outdir != null, 'Input parameter "outdir" cannot be unasigned.'
 
 println "P I P E L I N E     I P U T S    "
 println "================================="
-//println "sample             : ${params.sample}"
-//println "bam                : ${params.bam}"
 println "bam_paths          : ${params.bam_paths}"
 println "vcf                : ${params.vcf}"
 println "HapCUT2            : ${params.HapCUT2}"
@@ -58,7 +53,12 @@ println "outdir             : ${params.outdir}"
 
 // Turn the file with FASTQ paths into a channel with [sample, path] tuples.
 bam_paths_ch = Channel.fromPath(params.bam_paths)
-bam_paths_ch = bam_paths_ch.splitCsv(header: true).map { it -> [it.sample, file(it.bam_path), file(it.bai_path)] }
+bam_paths_ch
+    .splitCsv(header: true)
+    .map { it -> [it.sample, file(it.bam_path), file(it.bai_path)] }
+    .into { bam_paths_process_ch; bam_paths_check_ch }
+
+bam_sample_names_ch = bam_paths_check_ch.map { it -> it[0] }
 
 // Get file handlers for input files.
 vcf = file(params.vcf)
@@ -72,7 +72,7 @@ LinkFragments = params.HapCUT2 + "/utilities/LinkFragments.py"
 
 process make_small_bam {
     input:
-    set sample, file(bam), file(bai) from bam_paths_ch
+    set sample, file(bam), file(bai) from bam_paths_process_ch
 
     output:
     set sample, file("small.bam"), file("small.bam.bai") into small_bam_ch, small_bam_haplotag_bam_ch
@@ -86,7 +86,7 @@ process make_small_bam {
 
 process get_sample_names {
     output:
-    file "samples.txt" into sample_names_ch
+    file "samples.txt" into vcf_sample_names_ch
 
     script:
     """
@@ -100,12 +100,24 @@ process get_sample_names {
 }
 
 // Convert this channel from a file with sample names, to a channel with one item per sample name.
-sample_names_ch = sample_names_ch.splitText().map { it.trim() }
+vcf_sample_names_ch
+    .splitText()
+    .map { it.trim() }
+    .into { vcf_sample_names_check_ch; vcf_sample_names_split_ch }
+
+//vcf_sample_names_check_ch.subscribe { println it }
+//vcf_sn = vcf_sample_names_check_ch.collect()
+//bam_sn = bam_sample_names_ch.toList().toSet()
+//println "${vcf_sn.getClass()}"
+//print "${vcf_sn}"
+//intersect_size = vcf_sn.intersect(bam_sn).size()
+//union_size = vcf_sn.union(bam_sn).size()
+//assert vcf_sn == bam_sn, "error"
 
 // FIXME: -L option only for testing
 process get_sample_vcf {
     input:
-    val sample from sample_names_ch
+    val sample from vcf_sample_names_split_ch
 
     output:
     //set sample, file("sample.vcf") into vcf_extract_ch, vcf_link_ch, vcf_phase_ch
