@@ -90,7 +90,7 @@ process align_reads {
 
     script:
     """
-    longranger align --id=$sample --sample=$sample \
+    longranger align --id=$sample \
         --reference=$reference \
         --fastqs=$fastq_path \
         --localcores=${params.threads} \
