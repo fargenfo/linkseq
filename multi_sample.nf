@@ -296,8 +296,8 @@ process refine_genotypes {
     """
     gatk CalculateGenotypePosteriors \
         -V $vcf \
-        -O "refined.vcf"
-    #    -supporting $kGphase3
+        -O "refined.vcf" \
+        -supporting $kGphase3
     """
 }
 
