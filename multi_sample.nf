@@ -80,13 +80,25 @@ gvcf_paths = file(params.gvcf_path + "/*.g.vcf")
 
 // FIXME:
 // remove this when done testing
-targets = "chr17"
+//targets = "chr17"
 // FIXME
 
 
+// TODO:
+// --reader-threads argument can possibly improve performance, but only works with one interval at a time:
+// https://software.broadinstitute.org/gatk/documentation/tooldocs/current/org_broadinstitute_hellbender_tools_genomicsdb_GenomicsDBImport.php#--reader-threads
+// If I parallelize the entire analysis per chromosome (or some sort of chunking), this should work.
+// --batch-size can help limit memory consumption, but can slow down processing:
+// https://software.broadinstitute.org/gatk/documentation/tooldocs/current/org_broadinstitute_hellbender_tools_genomicsdb_GenomicsDBImport.php#--batch-size
+// Consider chunking, perhaps per chromosome, perhaps in equally large chunks, using -L in GenomicsDBImport, including chunk ID in output channels,
+// thereby parallelizing computation.
+// With exome data, chunking is somewhat easy. With whole-genomes, you may have to choose the split more carefully.
 
 // Consolidate the GVCFs with a "genomicsdb" database, so that we are ready for joint genotyping.
 process consolidate_gvcf {
+    memory = "${params.mem}GB"
+    cpus = params.threads
+
     output:
     file "genomicsdb" into genomicsdb_ch
 
@@ -106,6 +118,9 @@ process consolidate_gvcf {
 
 // Multisample variant calling via GenotypeGVCFs.
 process joint_genotyping {
+    memory = "${params.mem}GB"
+    cpus = params.threads
+
     input:
     file genomicsdb from genomicsdb_ch
 
@@ -135,6 +150,9 @@ The next few processes do variant recalibration. SNPs and indels are recalibrate
 // TODO: do I want the plots from "snps.plots.R" (and "snps.plots.R.pdf")?
 // Generate recalibration and tranches tables for recalibrating the SNP variants in the next step.
 process recalibrate_snps {
+    memory = "${params.mem}GB"
+    cpus = params.threads
+
     input:
     //file vcf from snps_recalibrate_ch
     set file(vcf), file(idx) from genotyped_snprecal_ch
@@ -167,6 +185,9 @@ process recalibrate_snps {
 // TODO: use --trust-all-polymorphic?
 // Generate recalibration and tranches tables for recalibrating the indel variants in the next step.
 process recalibrate_indels {
+    memory = "${params.mem}GB"
+    cpus = params.threads
+
     input:
     //file vcf from indels_recalibrate_ch
     set file(vcf), file(idx) from genotyped_indelrecal_ch
@@ -196,6 +217,9 @@ process recalibrate_indels {
 
 // Realibrate indels.
 process apply_vqsr_indels {
+    memory = "${params.mem}GB"
+    cpus = params.threads
+
     input:
     //file vcf from indels_apply_ch
     set file(vcf), file(idx) from genotyped_applyrecal_ch
@@ -223,6 +247,9 @@ process apply_vqsr_indels {
 
 // Recalibrate SNPs.
 process apply_vqsr_snps {
+    memory = "${params.mem}GB"
+    cpus = params.threads
+
     input:
     //file vcf from snps_apply_ch
     set file(vcf), file(idx) from recalibrated_indels_ch
@@ -256,6 +283,9 @@ process apply_vqsr_snps {
 // Consider which filters, if any, to apply.
 // Calculate the genotype posteriors based on all the samples in the VCF.
 process refine_genotypes {
+    memory = "${params.mem}GB"
+    cpus = params.threads
+
     input:
     set file(vcf), file(idx) from recalibrated_vcf_ch
 
@@ -274,6 +304,9 @@ process refine_genotypes {
 // Add rsid from dbSNP
 // NOTE: VariantAnnotator is still in beta (as of 20th of March 2019).
 process annotate_rsid {
+    memory = "${params.mem}GB"
+    cpus = params.threads
+
     input:
     set file(vcf), file(idx) from refined_vcf_ch
 
@@ -293,6 +326,9 @@ process annotate_rsid {
 // TODO: memory specification?
 // Annotate the VCF with effect prediction. Output some summary stats from the effect prediction as well.
 process annotate_effect {
+    memory = "${params.mem}GB"
+    cpus = params.threads
+
     publishDir "${params.outdir}/variants", pattern: "snpEff_stats.csv", mode: 'copy', overwrite: true
 
     input:
@@ -315,6 +351,9 @@ process annotate_effect {
 }
 
 process zip_and_index_vcf {
+    memory = "${params.mem}GB"
+    cpus = params.threads
+
     publishDir "${params.outdir}/variants", mode: 'copy', overwrite: true
 
     input:
@@ -334,6 +373,9 @@ process zip_and_index_vcf {
 // correctly formatted and such.
 // Validate the VCF sice we used a non-GAKT tool.
 process validate_vcf {
+    memory = "${params.mem}GB"
+    cpus = params.threads
+
     publishDir "${params.outdir}/variants", mode: 'copy', overwrite: true, saveAs: { filename -> "validation.log" }
     input:
     set file(vcf), file(idx) from variants_validate_ch
@@ -351,6 +393,9 @@ process validate_vcf {
 }
 
 process variant_evaluation {
+    memory = "${params.mem}GB"
+    cpus = params.threads
+
     publishDir "${params.outdir}/variants", mode: 'copy', overwrite: true
 
     input:
@@ -383,6 +428,9 @@ process variant_evaluation {
 
 
 process multiqc {
+    memory = "4GB"
+    cpus = 1
+
     publishDir "${params.outdir}/multiqc", mode: 'copy', overwrite: true
 
     input:
