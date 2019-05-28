@@ -55,7 +55,7 @@ targets = file(params.targets)
 
 // FIXME
 // remove when done testing
-targets = "chr17"
+//targets = "chr17"
 // FIXME
 
 
@@ -93,23 +93,26 @@ process align_reads {
     """
 }
 
-process make_small_bam {
-    input:
-    set sample, file(bam), file(bai) from aligned_bam_prepare_ch
 
-    output:
-    set sample, file("small.bam"), file("small.bam.bai") into small_bam_ch
-
-    script:
-    """
-    samtools view -b -o "small.bam" -T $reference_fa $bam "chr17"
-    samtools index -b "small.bam"
-    """
-}
-
-aligned_bam_prepare_ch = null
-aligned_bam_apply_ch = null
-small_bam_ch.into { aligned_bam_prepare_ch; aligned_bam_apply_ch }
+// FIXME
+// remove when done testing
+//process make_small_bam {
+//    input:
+//    set sample, file(bam), file(bai) from aligned_bam_prepare_ch
+//
+//    output:
+//    set sample, file("small.bam"), file("small.bam.bai") into small_bam_ch
+//
+//    script:
+//    """
+//    samtools view -b -o "small.bam" -T $reference_fa $bam "chr17"
+//    samtools index -b "small.bam"
+//    """
+//}
+//
+//aligned_bam_prepare_ch = null
+//aligned_bam_apply_ch = null
+//small_bam_ch.into { aligned_bam_prepare_ch; aligned_bam_apply_ch }
 
 /*
 The next three processes, prepare_bqsr_table, analyze_covariates, and apply_bqsr, deal with base quality score
@@ -259,6 +262,9 @@ process concat_fastq {
 // Note that FastQC will allocate 250 MB of memory per thread used. Since FastQC is not a bottleneck of
 // this pipeline, it will be run with a single thread.
 process fastqc_analysis {
+    memory = "250MB"
+    cpus = 1
+
     publishDir "${params.outdir}/fastqc/${sample}", mode: 'copy',
         saveAs: {filename -> filename.indexOf(".zip") > 0 ? "zips/$filename" : "$filename"}
 
@@ -296,13 +302,13 @@ process qualimap_analysis {
     # This first line adds two columns to our BED file with target regions, as QualiMap expects these.
     # The fifth and sixth column are respectively just "0" and ".", which has no information about the
     # regions.
-    #awk 'BEGIN{OFS="\\t"}{ if(NR > 2) { print \$1,\$2,\$3,\$4,0,"." } }' $targets > 'targets_6_fields.bed'
+    awk 'BEGIN{OFS="\\t"}{ if(NR > 2) { print \$1,\$2,\$3,\$4,0,"." } }' $targets > 'targets_6_fields.bed'
 
     # FIXME:
     # remove this when done testing.
     # and uncomment awk command above
-    echo 'track name="dummy" description="dummy BED" color=0,0,128 db=hg38' > 'targets_6_fields.bed'
-    echo 'chr17    1  83257441 allchr17   0   .' >> 'targets_6_fields.bed'
+    #echo 'track name="dummy" description="dummy BED" color=0,0,128 db=hg38' > 'targets_6_fields.bed'
+    #echo 'chr17    1  83257441 allchr17   0   .' > 'targets_6_fields.bed'
     # FIXME
 
     # Make sure QualiMap doesn't attemt to open a display server.
