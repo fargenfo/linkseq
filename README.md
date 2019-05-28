@@ -11,13 +11,14 @@
         * fix qualimap_analysis
     * multi_sample.nf
         * remove 'targets = "chr17"'
+* Parallelize multi-sample workflow via chunking?
 * Help strings
 * Each process should be allocated only as much memory as it needs. Profile the workflow to see the memory consumption
 * Dockerize
 * Phase VCF with HapCut2
     * Pretty much done. Check results.
 * Use CRAM. Most likely just use BAM all the way through and convert to CRAM at the end
-* Align reads with Lariat
+* Nice-to-have: Align reads with Lariat
 * Parameter checking:
     * Check that the FASTQ path exists
     * Check that the FASTQ path has data
