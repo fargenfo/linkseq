@@ -122,6 +122,10 @@ vcf_sample_names_ch
 // FIXME: -L option only for testing
 // Extract a single sample from the VCF. This process is run once for each sample, splitting the
 // VCF into as many files as there are samples.
+// --remove-unused-alternates is used to avoid gentypes like "2/3", which HapCUT2 can't deal with.
+// --exclude-non-variants is used to exclude missing genotypes, formatted as "./.", which HapCUT2
+// can't deal with either. These two arguments don't take anything away from the data, as when
+// the samples are merged together, everything will be the same again.
 process get_sample_vcf {
     input:
     val sample from vcf_sample_names_split_ch
@@ -138,11 +142,30 @@ process get_sample_vcf {
         -R $reference_fa \
         -sn $sample \
         -L ${params.interval} \
+        --remove-unused-alternates \
         -O "sample.vcf" \
         --tmp-dir=tmp \
         --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
     """
 }
+
+// FIXME:
+// this is temporary, another solution needed.
+process remove_nocalls {
+    input:
+    set sample, file(vcf), file(idx) from vcf_ch
+
+    output:
+    set sample, file("nocalls_removed.vcf"), file("nocalls_removed.vcf.idx") into vcf_nocalls_removed_ch
+
+    script:
+    """
+    # The grep pattern below searches for two different patterns: ./. and .|.
+    grep -v "\\./\\.\\|\\.|\\." $vcf > "nocalls_removed.vcf"
+    gatk IndexFeatureFile -F "nocalls_removed.vcf"
+    """
+}
+vcf_ch = vcf_nocalls_removed_ch
 
 // Make a channel with (sample ID, VCF, VCF index, BAM, BAM index) tuples.
 vcf_ch.join(small_bam_ch).into { data_extract_ch; data_link_ch; data_phase_ch }
@@ -215,18 +238,23 @@ process index_and_zip_vcf {
 
 // Merge VCFs into a multi-sample VCF, and compress and index it.
 process merge_phased_vcf {
+    publishDir "${params.outdir}/phased_vcf", mode: 'copy'
+
     input:
     val vcf_list from phased_vcf_merge_ch.toList()
 
     output:
-    set file("phased_merged.vcf.gz"), file("phased_merged.vcf.gz.tbi") into phased_merged_ch
+    //set file("phased_merged.vcf.gz"), file("phased_merged.vcf.gz.tbi") into phased_merged_ch
+    set file("phased_merged.vcf.gz") into phased_merged_ch
 
     script:
     // Prepare input string for vcf-merge.
     vcf_list_str = (vcf_list as List)
         .join(' ')  // Join paths in single string.
     """
-    vcf-merge $vcf_list_str | bgzip -c > "phased_merged.vcf.gz"
+    #vcf-merge --ref-for-missing 0 $vcf_list_str | bgzip -c > "phased_merged.vcf.gz"
+    vcf-merge --ref-for-missing 0 $vcf_list_str > "phased_merged.vcf"
+    bgzip "phased_merged.vcf" > "phased_merged.vcf.gz"
     tabix "phased_merged.vcf.gz"
     """
 }
@@ -241,7 +269,7 @@ process haplotag_bam {
     set sample, file(phased_vcf), file(idx), file(bam), file(bai) from data_haplotag_ch
 
     output:
-    file "phased.bam" into phased_bam_ch
+    set sample, file("phased.bam") into phased_bam_ch
 
     script:
     """
@@ -249,3 +277,17 @@ process haplotag_bam {
     """
 }
 
+process index_bam {
+    publishDir "${params.outdir}/phased_bam/$sample", mode: 'copy'
+
+    input:
+    set sample, file(bam) from phased_bam_ch
+
+    output:
+    set sample, file("phased.bam"), file("phased.bam.bai") into indexed_phased_bam
+
+    script:
+    """
+    samtools index "phased.bam"
+    """
+}
