@@ -1,16 +1,11 @@
-# You can use this file to create a conda environment for this pipeline:
-#   conda env create -f environment.yml
+
 name: exolink-alpha
+
 channels:
-  # To speed up things ("solving environment"), only specify necessary channels.
-  # I've specified the channels I've found to be the fastest for the different packages.
   - bioconda
   - conda-forge
-  #- compbiocore
-  #- defaults
 
 dependencies:
-  # Again, to speed things up, specify channel and version.
   - bioconda::fastqc=0.11.7
   - bioconda::ema=0.6.2
   - bioconda::gatk4=4.1.0.0
