@@ -4,7 +4,7 @@ Author: Ólavur Mortensen <olavur@fargen.fo>
 */
 
 // Input parameters.
-params.fastq_paths = null
+params.bam_paths = null
 params.reference = null
 params.dbsnp = null
 params.targets = null
@@ -27,7 +27,7 @@ if (params.help){
 }
 
 // Make sure necessary input parameters are assigned.
-assert params.fastq_paths != null, 'Input parameter "fastq_paths" cannot be unasigned.'
+assert params.bam_paths != null, 'Input parameter "bam_paths" cannot be unasigned.'
 assert params.reference != null, 'Input parameter "reference" cannot be unasigned.'
 assert params.dbsnp != null, 'Input parameter "dbsnp" cannot be unasigned.'
 assert params.targets != null, 'Input parameter "targets" cannot be unasigned.'
@@ -37,7 +37,7 @@ assert params.outdir != null, 'Input parameter "outdir" cannot be unasigned.'
 
 println "P I P E L I N E     I P U T S    "
 println "================================="
-println "fastq_paths         : ${params.fastq_paths}"
+println "bam_paths          : ${params.bam_paths}"
 println "reference          : ${params.reference}"
 println "dbsnp              : ${params.dbsnp}"
 println "targets            : ${params.targets}"
@@ -46,11 +46,10 @@ println "mem                : ${params.mem}"
 println "outdir             : ${params.outdir}"
 
 // Get file handlers for input files.
-reference = file(params.reference)  // Directory of 10x reference.
-reference_fa = file(params.reference + '/fasta/genome.fa')  // Reference fasta file.
+bam_paths = file(params.bam_paths)
+reference = file(params.reference)
 dbsnp = file(params.dbsnp)
 targets = file(params.targets)
-
 
 
 // FIXME
@@ -59,39 +58,18 @@ targets = file(params.targets)
 // FIXME
 
 
-
-
+// FIXME:
+// This has not been tested.
+//
 // Turn the file with FASTQ paths into a channel with [sample, path] tuples.
-fastq_paths_ch = Channel.fromPath(params.fastq_paths)
-fastq_paths_ch
+bam_paths_ch = Channel.fromPath(params.bam_paths)
+bam_paths_ch
     .splitCsv(header: true)
-    .map { it -> tuple(it.sample, it.fastq_path) }
-    .into { fastq_align_ch; fastq_print_ch; fastq_qc_ch }
+    .map { it -> tuple(it.sample, it.bam_path, it.bai_path) }
+    .into { aligned_bam_prepare_ch; aligned_bam_apply_ch }
 
-println("Processing data:\nSample\tFASTQ path")
-fastq_print_ch.subscribe { println(it[0] + "\t" + it[1]) }
-
-// Align FASTQ reads to reference with LongRanger ALIGN command.
-// https://support.10xgenomics.com/genome-exome/software/pipelines/latest/advanced/other-pipelines
-process align_reads {
-    memory = "${params.mem}GB"
-    cpus = params.threads
-
-    input:
-    set sample, fastq_path from fastq_align_ch
-
-    output:
-    set sample, file("$sample/outs/possorted_bam.bam"), file("$sample/outs/possorted_bam.bam.bai") into aligned_bam_prepare_ch, aligned_bam_apply_ch
-
-    script:
-    """
-    longranger align --id=$sample \
-        --reference=$reference \
-        --fastqs=$fastq_path \
-        --localcores=${params.threads} \
-        --localmem=${params.mem}
-    """
-}
+println("Processing data:\nSample\tBAM path\tBAI path")
+fastq_print_ch.subscribe { println(it[0] + "\t" + it[1] + "\t" + it[2]) }
 
 
 // FIXME
@@ -236,54 +214,7 @@ process call_sample {
 Below we perform QC of data.
 */
 
-// Prepare input for FastQC. FastQC needs the paths to FASTQ files. Below, we get each path in a list,
-// and then we map the list to a string.
-fastq_concat_ch = fastq_qc_ch
-    .map { tuple(it[0], file(it[1] + "/*.fastq{.gz,}")) }
-    .map { tuple(it[0], it[1].join(' ')) }
-
-// Concatenate all the FASTQ files of one sample into one FASTQ file. This way, we get only one FastQC
-// report. Also, conveniently, we avoid using the original file names, possibly containing confidiential
-// sample names, in the FastQC report.
-process concat_fastq {
-    input:
-    set sample, fastq_list from fastq_concat_ch
-
-    output:
-    set sample, file("${sample}.fastq.gz") into fastq_fastqc_ch
-
-    script:
-    """
-    zcat $fastq_list | bgzip -c > "${sample}.fastq.gz"
-    """
-}
-
-// Run FastQC for QC metrics of raw data.
-// Note that FastQC will allocate 250 MB of memory per thread used. Since FastQC is not a bottleneck of
-// this pipeline, it will be run with a single thread.
-process fastqc_analysis {
-    memory = "250MB"
-    cpus = 1
-
-    publishDir "${params.outdir}/fastqc/${sample}", mode: 'copy',
-        saveAs: {filename -> filename.indexOf(".zip") > 0 ? "zips/$filename" : "$filename"}
-
-    input:
-    set sample, fastq from fastq_fastqc_ch
-
-    output:
-    set sample, file('*.{zip,html}') into fastqc_report_ch
-    set sample, file('.command.out') into fastqc_stdout_ch
-
-    script:
-    """
-    mkdir tmp
-    fastqc -q --dir tmp --outdir . $fastq
-    """
-}
-
-
-// Run Qualimap for QC metrics of aligned and recalibrated BAM.
+// Run Qualimap for QC metrics of recalibrated BAM.
 process qualimap_analysis {
     memory = "${params.mem}GB"
     cpus = params.threads
