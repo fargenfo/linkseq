@@ -1,35 +1,20 @@
 
-# GATK best-practices pipeline adapted to linked-reads
+# exolink -- GATK best-practices pipeline adapted to linked-reads [WIP]
 
+This pipeline aligns [linked-reads from 10x Genomics](https://www.10xgenomics.com/linked-reads/) and calls variants with GAKT. Specifically, germline short variant discovery (SNPs and indels) is performed according to [GATK best-practices](https://software.broadinstitute.org/gatk/best-practices/workflow?id=11145).
 
-**TODO:**
+The pipeline is written in [Nextflow](https://www.nextflow.io/) and contains six sub-pipelines:
 
-* When done testing fix:
-    * single_sample.nf
-        * remove make_small_bam
-        * remove 'targets = "chr17"'
-        * fix qualimap_analysis
-    * multi_sample.nf
-        * remove 'targets = "chr17"'
-* Parallelize multi-sample workflow via chunking?
-* Help strings
-* Each process should be allocated only as much memory as it needs. Profile the workflow to see the memory consumption
-* Dockerize
-* Phase VCF with HapCut2
-    * Pretty much done. Check results.
-* Use CRAM. Most likely just use BAM all the way through and convert to CRAM at the end
-* Nice-to-have: Align reads with Lariat
-* Parameter checking:
-    * Check that the FASTQ path exists
-    * Check that the FASTQ path has data
-    * Check that "sample" is in the FASTQ path
-    * Check that files such as dbsnp exist
-    * Check that "gvcf_path" has at least one GVCF. Report number of GVCFs
-* Unit tests and Continuous integration
-    * Simulate small test data with LRSIM
-        * https://github.com/aquaskyline/LRSIM
-    * Make a tiny reference fasta. Maybe this can help:
-        * https://github.com/SciLifeLab/Sarek-data/blob/9087faa53d25fca90c1a84a48cfaf7cbed496317/scripts/makeShortContigs.py
-        * Also have to package the reference with longranger mkref
-    * Make tiny dbsnp, target BED, and so on
+* `ema_align.nf`: align reads with [EMA](https://github.com/arshajii/ema/)
+* `lr_align.nf`: align reads with [longranger ALIGN](https://support.10xgenomics.com/genome-exome/software/pipelines/latest/advanced/other-pipelines)
+* `bwa_align.nf`: align reads with [BWA](http://bio-bwa.sourceforge.net/)
+* `single_sample.nf `: recalibrate BAM and call variants with GATK
+* `multi_sample.nf`: joint genotyping and variant annotation and fitering.
+* `phase.nf`: phase variants with [HapCUT2](https://github.com/vibansal/HapCUT2)
+
+## Workflow
+
+* Basecall and demultiplex raw sequencing data with our [demuxlink](https://github.com/olavurmortensen/demuxlink) pipline
+* Process all your samples individualy with first `ema_align.nf` and `single_sample.nf`
+* Process your samples jointly with `multi_sample.nf`
 
