@@ -6,6 +6,7 @@ Author: Ólavur Mortensen <olavur@fargen.fo>
 // Input parameters.
 params.fastq_paths = null
 params.reference = null
+params.targets = null
 params.threads = null
 params.mem = null
 params.outdir = null
@@ -27,6 +28,7 @@ if (params.help){
 // Make sure necessary input parameters are assigned.
 assert params.fastq_paths != null, 'Input parameter "fastq_paths" cannot be unasigned.'
 assert params.reference != null, 'Input parameter "reference" cannot be unasigned.'
+assert params.targets != null, 'Input parameter "targets" cannot be unasigned.'
 assert params.threads != null, 'Input parameter "threads" cannot be unasigned.'
 assert params.mem != null, 'Input parameter "mem" cannot be unasigned.'
 assert params.outdir != null, 'Input parameter "outdir" cannot be unasigned.'
