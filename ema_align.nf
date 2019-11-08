@@ -31,7 +31,7 @@ if (params.help){
 }
 
 // Make sure necessary input parameters are assigned.
-assert params.fastq_path != null, 'Input parameter "fastq_paths" cannot be unasigned.'
+assert params.fastq_path != null, 'Input parameter "fastq_path" cannot be unasigned.'
 assert params.reference != null, 'Input parameter "reference" cannot be unasigned.'
 assert params.targets != null, 'Input parameter "targets" cannot be unasigned.'
 assert params.whitelist != null, 'Input parameter "whitelist" cannot be unasigned.'
@@ -56,20 +56,20 @@ reference = file(params.reference)
 targets = file(params.targets)
 whitelist = file(params.whitelist)
 
-// NOTE:
+// Get lists of the read 1 and 2 FASTQ files.
 // We assume two read pairs, R1 and R2, and that it is compressed. Multiple lanes work.
-process merge_lanes {
-    input:
-    //file r1 from fastq_r1_ch
-    //file r1 from fastq_r2_ch
+file_r1 = file(params.fastq_path + '/*R1*.gz')
+file_r2 = file(params.fastq_path + '/*R2*.gz')
 
+// Merge all lanes in read 1 and 2.
+process merge_lanes {
     output:
     file 'R1.fastq' into fastq_r1_ch
     file 'R2.fastq' into fastq_r2_ch
 
     script:
-    r1_list = file(params.fastq_path + '/*R1*.gz').join(' ')
-    r2_list = file(params.fastq_path + '/*R2*.gz').join(' ')
+    r1_list = file_r1.join(' ')
+    r2_list = file_r2.join(' ')
     """
     zcat $r1_list > 'R1.fastq'
     zcat $r2_list > 'R2.fastq'
