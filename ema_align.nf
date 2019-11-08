@@ -127,7 +127,9 @@ process preproc {
     """
 }
 
-//rg = "@RG\tID:rg1\tSM:sample1"
+// It is important that the input to EMA (and BWA further down) contains literal "\t" strings, not actual tabs.
+// Using the "/" character here and enclosing it in quotes, "$READGROUP_EMA" in the processes achieves this.
+READGROUP_EMA = /@RG\tID:ema\tSM:sample1/
 
 // TODO:
 // read group
@@ -146,17 +148,19 @@ process ema_align {
 
     script:
     """
-    #ema align -t ${params.threads} -d -r $reference -R "@RG\tID:ema\tSM:sample1" -s $preproc_dir/ema-bin-* | \
-    #    samtools sort -@ 1 -O bam -l 0 -m 4G -o "ema_aligned.bam" -
-    parallel --bar -j${params.threads} "ema align -t 1 -d -r $reference -s {} |\
+    # NOTE: the original command:
+    parallel --bar -j${params.threads} "ema align -t 1 -d -r $reference -R '$READGROUP_EMA' -s {} |\
         samtools sort -@ 1 -O bam -l 0 -m 4G -o {}.bam -" ::: $preproc_dir/ema-bin-???
+    # NOTE: trying the command without parallel:
+    #ema align -t ${params.threads} -d -r $reference -R "$READGROUP_EMA" -s "$preproc_dir/ema-bin-*" | \
+    #    samtools sort -@ 1 -O bam -l 0 -m 4G -o "ema_aligned.bam" -
     # The -c -p arguments make it so that the duplicate @PG and @RG tags are merged.
     samtools merge -c -p "ema_aligned.bam" $preproc_dir/ema-bin*.bam
     """
 }
 
-// TODO:
-// Add read group. picard MarkDuplicates gets confused because there are \t characters in the @PG line.
+READGROUP_BWA = /@RG\tID:bwa\tSM:sample1/
+
 process map_nobc {
     memory = "${params.mem}GB"
     cpus = params.threads
@@ -169,7 +173,7 @@ process map_nobc {
 
     script:
     """
-    bwa mem -p -t ${params.threads} -M -R "@RG\tID:bwa\tSM:sample1" $reference $preproc_dir/ema-nobc | \
+    bwa mem -p -t ${params.threads} -M -R "$READGROUP_BWA" $reference $preproc_dir/ema-nobc | \
       samtools sort -@ 1 -O bam -l 0 -m 4G -o bwa_nobc.bam
     #bwa mem -p -t ${params.threads} -M -R "@RG\tID:rg1\tSM:sample1" $reference $preproc_dir/ema-nobc | \
     #  samtools sort -@ 1 -O bam -l 0 -m 4G -o bwa_nobc.bam
