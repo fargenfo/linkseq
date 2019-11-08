@@ -91,9 +91,6 @@ process interleave_fastq {
 }
 
 process bc_count {
-    memory = "${params.mem}GB"
-    cpus = params.threads
-
     input:
     val fastq from fastq_count_ch
 
@@ -111,9 +108,6 @@ process bc_count {
 // Number of bins seems to have a large effect on how many reads end up in the "non-barcode" (nobc) bin.
 // The ema GitHub recomments 500 bins.
 process preproc {
-    memory = "${params.mem}GB"
-    cpus = params.threads
-
     input:
     file fastq from fastq_preproc_ch
     set file(fcnt), file(ncnt) from bc_count_ch
@@ -137,9 +131,6 @@ READGROUP_EMA = /@RG\tID:ema\tSM:sample1/
 // This writes all the BAMs to the "preproc_dir" directory, and then merges them to a new BAM in the working directory. This is messy.
 // FIXME: This creates the same number of read groups as there are bins.
 process ema_align {
-    memory = "${params.mem}GB"
-    cpus = params.threads
-
     input:
     file preproc_dir from preproc_ema_ch
 
@@ -162,9 +153,6 @@ process ema_align {
 READGROUP_BWA = /@RG\tID:bwa\tSM:sample1/
 
 process map_nobc {
-    memory = "${params.mem}GB"
-    cpus = params.threads
-
     input:
     file preproc_dir from preproc_bwa_ch
 
@@ -195,9 +183,6 @@ process map_nobc {
 
 
 process mark_dup_ema {
-    memory = "${params.mem}GB"
-    cpus = params.threads
-
     input:
     file bam from ema_bam_ch
 
@@ -211,9 +196,6 @@ process mark_dup_ema {
 }
 
 process mark_dup_nobc {
-    memory = "${params.mem}GB"
-    cpus = params.threads
-
     input:
     file bam from nobc_bam_ch
 
@@ -227,9 +209,6 @@ process mark_dup_nobc {
 }
 
 process merge_bams {
-    memory = "${params.mem}GB"
-    cpus = params.threads
-
     input:
     file bam_ema from marked_dup_ema_ch
     file bam_nobc from marked_dup_nobc_ch
@@ -245,9 +224,6 @@ process merge_bams {
 
 // Run Qualimap for QC metrics of aligned and recalibrated BAM.
 process qualimap_analysis {
-    memory = "${params.mem}GB"
-    cpus = params.threads
-
     input:
     file bam from merged_bam_ch
 
