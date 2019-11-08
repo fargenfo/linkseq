@@ -169,7 +169,7 @@ process merge_bams {
     script:
     ema_bam_list = (ema_bams as List).join(' ')
     """
-    samtools merge -@ 1 -O bam -l 0 -c -p "merged.bam" $ema_bam_list $bwa_bam
+    samtools merge -@ ${task.cpus} -O bam -l 0 -c -p "merged.bam" $ema_bam_list $bwa_bam
     """
 }
 
@@ -182,62 +182,42 @@ process sort_bams {
 
     script:
     """
-    samtools sort -@ 1 -O bam -l 0 -m 4G -o sorted.bam $bam
+    samtools sort -@ ${task.cpus} -O bam -l 0 -m 4G -o sorted.bam $bam
     """
 }
 
 
-
-
-process mark_dup_ema {
+// NOTE:
+// MarkDuplicates has the following option, I wonder why:
+// --BARCODE_TAG:String          Barcode SAM tag (ex. BC for 10X Genomics)  Default value: null.                          
+process mark_dup {
     input:
-    file bam from ema_bam_ch
+    file bam from sorted_bam_markdup_ch
 
     output:
-    file "marked_dup_ema.bam" into marked_dup_ema_ch
+    file "marked_dup.bam" into marked_bam_qc_ch
 
     script:
     """
-    gatk MarkDuplicates -I $bam -O "marked_dup_ema.bam" -M "marked_dup_metrics.txt"
+    gatk MarkDuplicates -I $bam -O "marked_dup.bam" -M "marked_dup_metrics.txt"
     """
 }
 
-process mark_dup_nobc {
-    input:
-    file bam from nobc_bam_ch
+/*
 
-    output:
-    file "marked_dup_nobc.bam" into marked_dup_nobc_ch
 
-    script:
-    """
-    gatk MarkDuplicates -I $bam -O "marked_dup_nobc.bam" -M "marked_dup_metrics.txt"
-    """
-}
-
-process merge_bams {
-    input:
-    file bam_ema from marked_dup_ema_ch
-    file bam_nobc from marked_dup_nobc_ch
-
-    output:
-    file 'merged.bam' into merged_bam_ch
-
-    script:
-    """
-    samtools merge "merged.bam" $bam_ema $bam_nobc
-    """
-}
-
+// FIXME:
+// Qualimap gives some Java error related to fonts.
 // Run Qualimap for QC metrics of aligned and recalibrated BAM.
 process qualimap_analysis {
     input:
-    file bam from merged_bam_ch
+    file bam from marked_bam_qc_ch
 
     output:
     file "qualimap_results" into qualimap_results_ch
 
     script:
+    
     """
     # This first line adds two columns to our BED file with target regions, as QualiMap expects these.
     # The fifth and sixth column are respectively just "0" and ".", which has no information about the
@@ -262,12 +242,11 @@ process qualimap_analysis {
         --skip-duplicated \
         --collect-overlap-pairs \
         -nt ${task.cpus} \
-        --java-mem-size=${task.memory}G
+        --java-mem-size="${task.memory.toGiga()}G"
     """
 }
 
-
-
+*/
 
 
 
