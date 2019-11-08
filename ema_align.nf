@@ -12,8 +12,6 @@ params.reference = null
 params.targets = null
 params.whitelist = null
 params.bcbins = null
-params.threads = null
-params.mem = null
 params.outdir = null
 params.help = false
 
@@ -36,8 +34,6 @@ assert params.reference != null, 'Input parameter "reference" cannot be unasigne
 assert params.targets != null, 'Input parameter "targets" cannot be unasigned.'
 assert params.whitelist != null, 'Input parameter "whitelist" cannot be unasigned.'
 assert params.bcbins != null, 'Input parameter "bcbins" cannot be unasigned.'
-assert params.threads != null, 'Input parameter "threads" cannot be unasigned.'
-assert params.mem != null, 'Input parameter "mem" cannot be unasigned.'
 assert params.outdir != null, 'Input parameter "outdir" cannot be unasigned.'
 
 println "P I P E L I N E     I P U T S    "
@@ -47,8 +43,6 @@ println "reference          : ${params.reference}"
 println "targets            : ${params.targets}"
 println "whitelist          : ${params.whitelist}"
 println "bcbins             : ${params.bcbins}"
-println "threads            : ${params.threads}"
-println "mem                : ${params.mem}"
 println "outdir             : ${params.outdir}"
 
 // Get file handlers for input files.
@@ -117,7 +111,7 @@ process preproc {
 
     script:
     """
-    cat $fastq | ema preproc -h -w $whitelist -n ${params.bcbins} -t ${params.threads} -o 'preproc_dir' $ncnt
+    cat $fastq | ema preproc -h -w $whitelist -n ${params.bcbins} -t ${task.cpus} -o 'preproc_dir' $ncnt
     """
 }
 
@@ -140,10 +134,10 @@ process ema_align {
     script:
     """
     # NOTE: the original command:
-    parallel --bar -j${params.threads} "ema align -t 1 -d -r $reference -R '$READGROUP_EMA' -s {} |\
+    parallel --bar -j${task.cpus} "ema align -t 1 -d -r $reference -R '$READGROUP_EMA' -s {} |\
         samtools sort -@ 1 -O bam -l 0 -m 4G -o {}.bam -" ::: $preproc_dir/ema-bin-???
     # NOTE: trying the command without parallel:
-    #ema align -t ${params.threads} -d -r $reference -R "$READGROUP_EMA" -s "$preproc_dir/ema-bin-*" | \
+    #ema align -t ${task.cpus} -d -r $reference -R "$READGROUP_EMA" -s "$preproc_dir/ema-bin-*" | \
     #    samtools sort -@ 1 -O bam -l 0 -m 4G -o "ema_aligned.bam" -
     # The -c -p arguments make it so that the duplicate @PG and @RG tags are merged.
     samtools merge -c -p "ema_aligned.bam" $preproc_dir/ema-bin*.bam
@@ -161,9 +155,9 @@ process map_nobc {
 
     script:
     """
-    bwa mem -p -t ${params.threads} -M -R "$READGROUP_BWA" $reference $preproc_dir/ema-nobc | \
+    bwa mem -p -t ${task.cpus} -M -R "$READGROUP_BWA" $reference $preproc_dir/ema-nobc | \
       samtools sort -@ 1 -O bam -l 0 -m 4G -o bwa_nobc.bam
-    #bwa mem -p -t ${params.threads} -M -R "@RG\tID:rg1\tSM:sample1" $reference $preproc_dir/ema-nobc | \
+    #bwa mem -p -t ${task.cpus} -M -R "@RG\tID:rg1\tSM:sample1" $reference $preproc_dir/ema-nobc | \
     #  samtools sort -@ 1 -O bam -l 0 -m 4G -o bwa_nobc.bam
     """
 }
@@ -254,8 +248,8 @@ process qualimap_analysis {
         -outdir "qualimap_results" \
         --skip-duplicated \
         --collect-overlap-pairs \
-        -nt ${params.threads} \
-        --java-mem-size=${params.mem}G
+        -nt ${task.cpus} \
+        --java-mem-size=${task.memory}G
     """
 }
 
