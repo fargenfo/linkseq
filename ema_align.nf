@@ -157,6 +157,22 @@ process map_nobc {
     """
 }
 
+
+process merge_bams {
+    input:
+    file ema_bams from ema_bam_ch.collect()
+    file bwa_bam from nobc_bam_ch
+
+    output:
+    file "merged.bam" into merged_bam_ch
+
+    script:
+    ema_bam_list = (ema_bams as List).join(' ')
+    """
+    samtools merge -@ 1 -l 0 -c -p "merged.bam" $ema_bam_list $bwa_bam
+    """
+}
+
 //process add_rg_nobc {
 //    input:
 //    file bam from nobc_bam_ch
@@ -247,7 +263,6 @@ process qualimap_analysis {
         --java-mem-size=${task.memory}G
     """
 }
-
 
 
 
