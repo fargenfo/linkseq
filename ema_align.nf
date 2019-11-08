@@ -145,17 +145,15 @@ READGROUP_BWA = /@RG\tID:bwa\tSM:sample1/
 
 process map_nobc {
     input:
-    file preproc_dir from preproc_bwa_ch
+    file nobc_bin from nobc_bin_bwa_ch
 
     output:
     file "bwa_nobc.bam" into nobc_bam_ch
 
     script:
     """
-    bwa mem -p -t ${task.cpus} -M -R "$READGROUP_BWA" $reference $preproc_dir/ema-nobc | \
-      samtools sort -@ 1 -O bam -l 0 -m 4G -o bwa_nobc.bam
-    #bwa mem -p -t ${task.cpus} -M -R "@RG\tID:rg1\tSM:sample1" $reference $preproc_dir/ema-nobc | \
-    #  samtools sort -@ 1 -O bam -l 0 -m 4G -o bwa_nobc.bam
+    bwa mem -p -t ${task.cpus} -M -R "$READGROUP_BWA" $reference $nobc_bin | \
+      samtools sort -@ 1 -O bam -l 0 -m 4G -o "bwa_nobc.bam"
     """
 }
 
@@ -249,7 +247,6 @@ process qualimap_analysis {
         --java-mem-size=${task.memory}G
     """
 }
-
 
 
 
