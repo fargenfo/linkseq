@@ -86,7 +86,7 @@ process interleave_fastq {
 
 process bc_count {
     input:
-    val fastq from fastq_count_ch
+    file fastq from fastq_count_ch
 
     output:
     set file('*.ema-fcnt'), file('*.ema-ncnt') into bc_count_ch
