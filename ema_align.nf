@@ -98,7 +98,7 @@ process bc_count {
 }
 
 // TODO:
-// How many bins to use? There should be a params.bin
+// How many bins to use?
 // Number of bins seems to have a large effect on how many reads end up in the "non-barcode" (nobc) bin.
 // The ema GitHub recomments 500 bins.
 process preproc {
@@ -107,7 +107,8 @@ process preproc {
     set file(fcnt), file(ncnt) from bc_count_ch
 
     output:
-    file 'preproc_dir' into preproc_ema_ch, preproc_bwa_ch
+    file "preproc_dir/ema-bin-*" into bins_ema_ch mode flatten
+    file "preproc_dir/ema-nobc" into nobc_bin_bwa_ch
 
     script:
     """
@@ -119,28 +120,24 @@ process preproc {
 // Using the "/" character here and enclosing it in quotes, "$READGROUP_EMA" in the processes achieves this.
 READGROUP_EMA = /@RG\tID:ema\tSM:sample1/
 
+
 // TODO:
 // read group
 // More threads and memory for "samtools sort"?
-// This writes all the BAMs to the "preproc_dir" directory, and then merges them to a new BAM in the working directory. This is messy.
-// FIXME: This creates the same number of read groups as there are bins.
+// Maybe better to sort the BAM in a separate process.
+// Why do we sort the BAM at this stage? Maybe it would be better to sort once everything is merged.
 process ema_align {
     input:
-    file preproc_dir from preproc_ema_ch
+    file bin from bins_ema_ch
 
     output:
-    file "ema_aligned.bam" into ema_bam_ch
+    file "$bam" into ema_bam_ch
 
     script:
+    bam="${bin}.bam"
     """
-    # NOTE: the original command:
-    parallel --bar -j${task.cpus} "ema align -t 1 -d -r $reference -R '$READGROUP_EMA' -s {} |\
-        samtools sort -@ 1 -O bam -l 0 -m 4G -o {}.bam -" ::: $preproc_dir/ema-bin-???
-    # NOTE: trying the command without parallel:
-    #ema align -t ${task.cpus} -d -r $reference -R "$READGROUP_EMA" -s "$preproc_dir/ema-bin-*" | \
-    #    samtools sort -@ 1 -O bam -l 0 -m 4G -o "ema_aligned.bam" -
-    # The -c -p arguments make it so that the duplicate @PG and @RG tags are merged.
-    samtools merge -c -p "ema_aligned.bam" $preproc_dir/ema-bin*.bam
+    ema align -t ${task.cpus} -d -r $reference -R '$READGROUP_EMA' -s $bin | \
+        samtools sort -@ 1 -O bam -l 0 -o "$bam"
     """
 }
 
@@ -252,7 +249,6 @@ process qualimap_analysis {
         --java-mem-size=${task.memory}G
     """
 }
-
 
 
 
