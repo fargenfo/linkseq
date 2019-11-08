@@ -131,13 +131,12 @@ process ema_align {
     file bin from bins_ema_ch
 
     output:
-    file "$bam" into ema_bam_ch
+    file "${bin}.bam" into ema_bam_ch
 
     script:
-    bam="${bin}.bam"
     """
     ema align -t ${task.cpus} -d -r $reference -R '$READGROUP_EMA' -s $bin | \
-        samtools sort -@ 1 -O bam -l 0 -o "$bam"
+        samtools view -b -o ${bin}.bam
     """
 }
 
@@ -148,43 +147,46 @@ process map_nobc {
     file nobc_bin from nobc_bin_bwa_ch
 
     output:
-    file "bwa_nobc.bam" into nobc_bam_ch
+    file "nobc.bam" into nobc_bam_ch
 
     script:
     """
     bwa mem -p -t ${task.cpus} -M -R "$READGROUP_BWA" $reference $nobc_bin | \
-      samtools sort -@ 1 -O bam -l 0 -m 4G -o "bwa_nobc.bam"
+        samtools view -b -o nobc.bam
     """
 }
 
-
+// Merge BAMs from both EMA and BWA.
+// All BAMs from EMA bins have the same readgroup, so the RG and PG headers wil be combined.
 process merge_bams {
     input:
     file ema_bams from ema_bam_ch.collect()
     file bwa_bam from nobc_bam_ch
 
     output:
-    file "merged.bam" into merged_bam_ch
+    file "merged.bam" into merged_bam_sort_ch
 
     script:
     ema_bam_list = (ema_bams as List).join(' ')
     """
-    samtools merge -@ 1 -l 0 -c -p "merged.bam" $ema_bam_list $bwa_bam
+    samtools merge -@ 1 -O bam -l 0 -c -p "merged.bam" $ema_bam_list $bwa_bam
     """
 }
 
-//process add_rg_nobc {
-//    input:
-//    file bam from nobc_bam_ch
-//
-//    output:
-//    file "nobc_rg.bam" into nobc_rg_bam_ch
-//
-//    script:
-//    """
-//    samtools addreplacerg -r "@RG\tID:rg1\tSM:sample1" -o "nobc_rg.bam" $bam
-//    """
-//}
+process sort_bams {
+    input:
+    file bam from merged_bam_sort_ch
+
+    output:
+    file "sorted.bam" into sorted_bam_markdup_ch
+
+    script:
+    """
+    samtools sort -@ 1 -O bam -l 0 -m 4G -o sorted.bam $bam
+    """
+}
+
+
 
 
 process mark_dup_ema {
@@ -263,7 +265,6 @@ process qualimap_analysis {
         --java-mem-size=${task.memory}G
     """
 }
-
 
 
 
