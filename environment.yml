@@ -16,6 +16,8 @@ dependencies:
   - bioconda::bcftools=1.9
   - bioconda::whatshap=0.18
   - bioconda::tabix=0.2.6
+  - bioconda::samtools=1.9
+  - bioconda::bwa=0.7.17
   - bioconda::perl-vcftools-vcf=0.1.16
   - conda-forge::r-gsalib=2.1
   - conda-forge::r-gplots=3.0.1.1
