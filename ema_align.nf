@@ -123,9 +123,7 @@ READGROUP_EMA = /@RG\tID:ema\tSM:sample1/
 
 // TODO:
 // read group
-// More threads and memory for "samtools sort"?
-// Maybe better to sort the BAM in a separate process.
-// Why do we sort the BAM at this stage? Maybe it would be better to sort once everything is merged.
+// Maybe it isn't necessary to convert to BAM in this step. sort_bams can take SAM instead, and output BAM.
 process ema_align {
     input:
     file bin from bins_ema_ch
@@ -175,7 +173,7 @@ process merge_bams {
     """
 }
 
-process sort_bams {
+process sort_bam {
     input:
     file bam from merged_bam_sort_ch
 
@@ -184,10 +182,9 @@ process sort_bams {
 
     script:
     """
-    samtools sort -@ ${task.cpus} -O bam -l 0 -m 4G -o sorted.bam $bam
+    samtools sort -@ ${task.cpus} -O bam -l 0 -m 4G -o "sorted.bam" $bam
     """
 }
-
 
 // NOTE:
 // MarkDuplicates has the following option, I wonder why:
@@ -197,13 +194,14 @@ process mark_dup {
     file bam from sorted_bam_markdup_ch
 
     output:
-    file "marked_dup.bam" into marked_bam_qc_ch
+    file "marked_dup.bam" into marked_bam_merge_ch
 
     script:
     """
     gatk MarkDuplicates -I $bam -O "marked_dup.bam" -M "marked_dup_metrics.txt"
     """
 }
+
 
 /*
 
