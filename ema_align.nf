@@ -49,14 +49,15 @@ println "outdir             : ${params.outdir}"
 reference = file(params.reference)
 targets = file(params.targets)
 whitelist = file(params.whitelist)
+outdir = file(params.outdir)
 
 // Get lists of the read 1 and 2 FASTQ files.
 // We assume two read pairs, R1 and R2, and that it is compressed. Multiple lanes work.
 file_r1 = file(params.fastq_path + '/*R1*.gz')
 file_r2 = file(params.fastq_path + '/*R2*.gz')
 
-// A single FASTQ file to construct the readgroup from.
-fastq_rg_ch = file(params.fastq_path + '/*L001*R1*.gz')
+// A single FASTQ file to get the sample name from and to construct the readgroup from.
+Channel.fromPath(params.fastq_path + '/*L001*R1*.gz').into { fastq_sample_ch; fastq_rg_ch }
 
 // Merge all lanes in read 1 and 2.
 process merge_lanes {
@@ -120,6 +121,20 @@ process preproc {
     """
 }
 
+
+// Construct a readgroup from one of the input FASTQ files.
+process get_samplename {
+    input:
+    file fastq from fastq_sample_ch
+
+    output:
+    stdout sample_ch
+
+    script:
+    """
+    get_samplenames.py $fastq
+    """
+}
 
 // Construct a readgroup from one of the input FASTQ files.
 process get_readgroup {
@@ -207,17 +222,16 @@ process sort_bam {
     """
 }
 
-/*
-
 // NOTE:
 // MarkDuplicates has the following option, I wonder why:
 // --BARCODE_TAG:String          Barcode SAM tag (ex. BC for 10X Genomics)  Default value: null.                          
 process mark_dup {
     input:
     file bam from sorted_bam_markdup_ch
+    val sample from sample_ch
 
     output:
-    file "marked_dup.bam" into marked_bam_merge_ch
+    set sample, file("marked_dup.bam") into marked_bam_index_ch
 
     script:
     """
@@ -225,6 +239,26 @@ process mark_dup {
     """
 }
 
+process index_bam {
+    publishDir "$outdir/aligned/$sample", mode: 'copy', pattern: '*.bam',
+        saveAs: { filename -> "${sample}.bam" }
+    publishDir "$outdir/aligned/$sample", mode: 'copy', pattern: '*.bam.bai',
+        saveAs: { filename -> "${sample}.bam.bai" }
+
+    input:
+    set sample, file(bam) from marked_bam_index_ch
+
+    output:
+    set sample, file("marked_dup.bam"), file("indexed.bam.bai") into indexed_bam_qc_ch
+
+    script:
+    """
+    gatk BuildBamIndex -I $bam -O "indexed.bam.bai"
+    """
+}
+
+
+/*
 
 // FIXME:
 // Qualimap gives some Java error related to fonts.
