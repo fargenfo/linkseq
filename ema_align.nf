@@ -156,20 +156,22 @@ process map_nobc {
     """
 }
 
+// Combine BAMs from EMA and BWA into a single channel for merging.
+aligned_bam_merge_ch = ema_bam_ch.concat(nobc_bam_ch)
+
 // Merge BAMs from both EMA and BWA.
 // All BAMs from EMA bins have the same readgroup, so the RG and PG headers wil be combined.
 process merge_bams {
     input:
-    file ema_bams from ema_bam_ch.collect()
-    file bwa_bam from nobc_bam_ch
+    file bams from aligned_bam_merge_ch.collect()
 
     output:
     file "merged.bam" into merged_bam_sort_ch
 
     script:
-    ema_bam_list = (ema_bams as List).join(' ')
+    bam_list = (bams as List).join(' ')
     """
-    samtools merge -@ ${task.cpus} -O bam -l 0 -c -p "merged.bam" $ema_bam_list $bwa_bam
+    samtools merge -@ ${task.cpus} -O bam -l 0 -c -p "merged.bam" $bam_list
     """
 }
 
