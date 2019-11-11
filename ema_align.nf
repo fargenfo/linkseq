@@ -55,6 +55,9 @@ whitelist = file(params.whitelist)
 file_r1 = file(params.fastq_path + '/*R1*.gz')
 file_r2 = file(params.fastq_path + '/*R2*.gz')
 
+// A single FASTQ file to construct the readgroup from.
+fastq_rg_ch = file(params.fastq_path + '/*L001*R1*.gz')
+
 // Merge all lanes in read 1 and 2.
 process merge_lanes {
     output:
@@ -70,6 +73,7 @@ process merge_lanes {
     """
 }
 
+// Interleave reads 1 and 2.
 process interleave_fastq {
     input:
     file r1 from fastq_r1_ch
@@ -116,43 +120,60 @@ process preproc {
     """
 }
 
-// It is important that the input to EMA (and BWA further down) contains literal "\t" strings, not actual tabs.
-// Using the "/" character here and enclosing it in quotes, "$READGROUP_EMA" in the processes achieves this.
-READGROUP_EMA = /@RG\tID:ema\tSM:sample1/
 
+// Construct a readgroup from one of the input FASTQ files.
+process get_readgroup {
+    input:
+    file fastq from fastq_rg_ch
+
+    output:
+    stdout readgroup_ch
+
+    script:
+    """
+    get_readgroups.py $fastq
+    """
+}
+
+// Duplicate the readgroup channel.
+readgroup_ch.into { readgroup_ema_ch; readgroup_bwa_ch }
+
+// Combine the readgroup channel with the EMA bins channel so that each instance of the ema_align process gets
+// a readgroup object.
+bins_ema_ch = readgroup_ema_ch.combine(bins_ema_ch)
 
 // TODO:
 // read group
 // Maybe it isn't necessary to convert to BAM in this step. sort_bams can take SAM instead, and output BAM.
 process ema_align {
     input:
-    file bin from bins_ema_ch
+    set rg, file(bin) from bins_ema_ch
 
     output:
     file "${bin}.bam" into ema_bam_ch
 
     script:
     """
-    ema align -t ${task.cpus} -d -r $reference -R '$READGROUP_EMA' -s $bin | \
+    ema align -t ${task.cpus} -d -r $reference -R '$rg' -s $bin | \
         samtools view -b -o ${bin}.bam
     """
 }
 
-READGROUP_BWA = /@RG\tID:bwa\tSM:sample1/
-
 process map_nobc {
     input:
     file nobc_bin from nobc_bin_bwa_ch
+    val rg from readgroup_bwa_ch
 
     output:
     file "nobc.bam" into nobc_bam_ch
 
     script:
     """
-    bwa mem -p -t ${task.cpus} -M -R "$READGROUP_BWA" $reference $nobc_bin | \
+    bwa mem -p -t ${task.cpus} -M -R '$rg' $reference $nobc_bin | \
         samtools view -b -o nobc.bam
     """
 }
+
 
 // Combine BAMs from EMA and BWA into a single channel for merging.
 aligned_bam_merge_ch = ema_bam_ch.concat(nobc_bam_ch)
@@ -186,6 +207,8 @@ process sort_bam {
     """
 }
 
+/*
+
 // NOTE:
 // MarkDuplicates has the following option, I wonder why:
 // --BARCODE_TAG:String          Barcode SAM tag (ex. BC for 10X Genomics)  Default value: null.                          
@@ -201,9 +224,6 @@ process mark_dup {
     gatk MarkDuplicates -I $bam -O "marked_dup.bam" -M "marked_dup_metrics.txt"
     """
 }
-
-
-/*
 
 
 // FIXME:
