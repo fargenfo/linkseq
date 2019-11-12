@@ -8,8 +8,6 @@ params.bam_paths = null
 params.reference = null
 params.dbsnp = null
 params.targets = null
-params.threads = null
-params.mem = null
 params.outdir = null
 params.help = false
 
@@ -31,8 +29,6 @@ assert params.bam_paths != null, 'Input parameter "bam_paths" cannot be unasigne
 assert params.reference != null, 'Input parameter "reference" cannot be unasigned.'
 assert params.dbsnp != null, 'Input parameter "dbsnp" cannot be unasigned.'
 assert params.targets != null, 'Input parameter "targets" cannot be unasigned.'
-assert params.threads != null, 'Input parameter "threads" cannot be unasigned.'
-assert params.mem != null, 'Input parameter "mem" cannot be unasigned.'
 assert params.outdir != null, 'Input parameter "outdir" cannot be unasigned.'
 
 println "P I P E L I N E     I P U T S    "
@@ -41,12 +37,9 @@ println "bam_paths          : ${params.bam_paths}"
 println "reference          : ${params.reference}"
 println "dbsnp              : ${params.dbsnp}"
 println "targets            : ${params.targets}"
-println "threads            : ${params.threads}"
-println "mem                : ${params.mem}"
 println "outdir             : ${params.outdir}"
 
 // Get file handlers for input files.
-bam_paths = file(params.bam_paths)
 reference = file(params.reference)
 dbsnp = file(params.dbsnp)
 targets = file(params.targets)
@@ -60,16 +53,15 @@ targets = file(params.targets)
 
 // FIXME:
 // This has not been tested.
-//
+
 // Turn the file with FASTQ paths into a channel with [sample, path] tuples.
-bam_paths_ch = Channel.fromPath(params.bam_paths)
-bam_paths_ch
+Channel.fromPath(params.bam_paths)
     .splitCsv(header: true)
     .map { it -> tuple(it.sample, it.bam_path, it.bai_path) }
-    .into { aligned_bam_prepare_ch; aligned_bam_apply_ch }
+    .into { aligned_bam_prepare_ch; aligned_bam_apply_ch; aligned_bam_print_ch }
 
-println("Processing data:\nSample\tBAM path\tBAI path")
-fastq_print_ch.subscribe { println(it[0] + "\t" + it[1] + "\t" + it[2]) }
+println("Processing data:\nSample\t\tBAM path\t\tBAI path")
+aligned_bam_print_ch.subscribe { println(it[0] + "\t" + it[1] + "\t" + it[2]) }
 
 
 // FIXME
@@ -98,11 +90,9 @@ recalibration, in preparation for GATK best practices.
 BQSR: https://software.broadinstitute.org/gatk/documentation/article?id=44
 */
 
+
 // Generate recalibration table for BQSR.
 process prepare_bqsr_table {
-    memory = "${params.mem}GB"
-    cpus = params.threads
-
     input:
     set sample, file(bam), file(bai) from aligned_bam_prepare_ch
 
@@ -118,15 +108,12 @@ process prepare_bqsr_table {
             --known-sites $dbsnp \
             -O 'bqsr.table' \
             --tmp-dir=tmp \
-            --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
+            --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
     """
 }
 
 // Evaluate BQSR.
 process analyze_covariates {
-    memory = "${params.mem}GB"
-    cpus = params.threads
-
     publishDir "${params.outdir}/bam/analyze_covariates", mode: 'copy', overwrite: true, saveAs: { filename -> "${sample}_$filename" }
 
     input:
@@ -148,9 +135,6 @@ data_apply_bqsr_ch = aligned_bam_apply_ch.join(bqsr_table_copy_ch)
 
 // Apply recalibration to BAM file.
 process apply_bqsr {
-    memory = "${params.mem}GB"
-    cpus = params.threads
-
     publishDir "${params.outdir}/bam", mode: 'copy', overwrite: true
 
     input:
@@ -169,16 +153,13 @@ process apply_bqsr {
         -L $targets \
         -O "${sample}.bam" \
         --tmp-dir=tmp \
-        --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
+        --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
     mv "${sample}.bai" "${sample}.bam.bai"
     """
 }
 
 // Call variants in sample with HapltypeCaller, yielding a GVCF.
 process call_sample {
-    memory = "${params.mem}GB"
-    cpus = params.threads
-
     publishDir "${params.outdir}/gvcf", mode: 'copy', overwrite: true
 
     input:
@@ -206,7 +187,7 @@ process call_sample {
         --annotation Coverage \
         --verbosity INFO \
         --tmp-dir=tmp \
-        --java-options "-Xmx${params.mem}g -Xms${params.mem}g"
+        --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
     """
 }
 
@@ -214,11 +195,10 @@ process call_sample {
 Below we perform QC of data.
 */
 
+/*
+
 // Run Qualimap for QC metrics of recalibrated BAM.
 process qualimap_analysis {
-    memory = "${params.mem}GB"
-    cpus = params.threads
-
     publishDir "${params.outdir}/bamqc", mode: 'copy',
         saveAs: {filename -> "$sample"}
 
@@ -252,8 +232,9 @@ process qualimap_analysis {
         -outdir "qualimap_results" \
         --skip-duplicated \
         --collect-overlap-pairs \
-        -nt ${params.threads} \
-        --java-mem-size=${params.mem}G
+        -nt ${task.cpus} \
+        --java-mem-size=${task.memory.toGiga()}G
     """
 }
 
+*/
