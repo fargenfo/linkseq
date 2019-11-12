@@ -48,7 +48,7 @@ targets = file(params.targets)
 // Turn the file with BAM paths into a channel with [sample, BAM path, BAI path] tuples.
 Channel.fromPath(params.bam_paths)
     .splitCsv(header: true)
-    .map { it -> tuple(it.sample, it.bam_path, it.bai_path) }
+    .map { it -> tuple(it.sample, file(it.bam_path), file(it.bai_path)) }
     .into { aligned_bam_prepare_ch; aligned_bam_apply_ch; aligned_bam_print_ch }
 
 println("Processing data:\nSample\t\tBAM path\t\tBAI path")
@@ -75,7 +75,7 @@ process prepare_bqsr_table {
     mkdir tmp
     gatk BaseRecalibrator \
             -I $bam \
-            -R $reference_fa \
+            -R $reference \
             --known-sites $dbsnp \
             -O 'bqsr.table' \
             --tmp-dir=tmp \
@@ -106,26 +106,29 @@ data_apply_bqsr_ch = aligned_bam_apply_ch.join(bqsr_table_copy_ch)
 
 // Apply recalibration to BAM file.
 process apply_bqsr {
-    publishDir "${params.outdir}/bam", mode: 'copy', overwrite: true
+    publishDir "${params.outdir}/bam/recalibrated/$sample", mode: 'copy', pattern: '*.bam',
+        saveAs: { filename -> "${sample}.bam" }
+    publishDir "${params.outdir}/bam/recalibrated/$sample", mode: 'copy', pattern: '*.bam.bai',
+        saveAs: { filename -> "${sample}.bam.bai" }
 
     input:
     set sample, file(bam), file(bai), file(bqsr_table) from data_apply_bqsr_ch
 
     output:
-    set sample, file("${sample}.bam"), file("${sample}.bam.bai") into recalibrated_bam_call_ch, recalibrated_bam_qualimap_ch
+    set sample, file("recalibrated.bam"), file("recalibrated.bam.bai") into recalibrated_bam_call_ch, recalibrated_bam_qualimap_ch
 
     script:
     """
     mkdir tmp
     gatk ApplyBQSR \
-        -R $reference_fa \
+        -R $reference \
         -I $bam \
         --bqsr-recal-file $bqsr_table \
         -L $targets \
-        -O "${sample}.bam" \
+        -O "recalibrated.bam" \
         --tmp-dir=tmp \
         --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
-    mv "${sample}.bai" "${sample}.bam.bai"
+    mv "recalibrated.bai" "recalibrated.bam.bai"
     """
 }
 
@@ -145,7 +148,7 @@ process call_sample {
     gatk HaplotypeCaller  \
         -I $bam \
         -O "${sample}.g.vcf" \
-        -R $reference_fa \
+        -R $reference \
         -L $targets \
         --dbsnp $dbsnp \
         -ERC GVCF \
