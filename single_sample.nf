@@ -45,16 +45,7 @@ dbsnp = file(params.dbsnp)
 targets = file(params.targets)
 
 
-// FIXME
-// remove when done testing
-//targets = "chr17"
-// FIXME
-
-
-// FIXME:
-// This has not been tested.
-
-// Turn the file with FASTQ paths into a channel with [sample, path] tuples.
+// Turn the file with BAM paths into a channel with [sample, BAM path, BAI path] tuples.
 Channel.fromPath(params.bam_paths)
     .splitCsv(header: true)
     .map { it -> tuple(it.sample, it.bam_path, it.bai_path) }
@@ -63,26 +54,6 @@ Channel.fromPath(params.bam_paths)
 println("Processing data:\nSample\t\tBAM path\t\tBAI path")
 aligned_bam_print_ch.subscribe { println(it[0] + "\t" + it[1] + "\t" + it[2]) }
 
-
-// FIXME
-// remove when done testing
-//process make_small_bam {
-//    input:
-//    set sample, file(bam), file(bai) from aligned_bam_prepare_ch
-//
-//    output:
-//    set sample, file("small.bam"), file("small.bam.bai") into small_bam_ch
-//
-//    script:
-//    """
-//    samtools view -b -o "small.bam" -T $reference_fa $bam "chr17"
-//    samtools index -b "small.bam"
-//    """
-//}
-//
-//aligned_bam_prepare_ch = null
-//aligned_bam_apply_ch = null
-//small_bam_ch.into { aligned_bam_prepare_ch; aligned_bam_apply_ch }
 
 /*
 The next three processes, prepare_bqsr_table, analyze_covariates, and apply_bqsr, deal with base quality score
