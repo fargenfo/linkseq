@@ -23,7 +23,7 @@ with gzip.open(fastq_path, 'rt') as fid:
     line = fid.readline().strip()
 
 # Get the instrument and the flow cell ID. Remove the "@" from the instrument ID.
-instrument = re.split(':', line)[2][1:]
+instrument = re.split(':', line)[0][1:]
 flowcell = re.split(':', line)[2]
 
 # Get the filename from the path.
