@@ -228,10 +228,9 @@ process sort_bam {
 process mark_dup {
     input:
     file bam from sorted_bam_markdup_ch
-    val sample from sample_ch
 
     output:
-    set sample, file("marked_dup.bam") into marked_bam_index_ch
+    file "marked_dup.bam" into marked_bam_index_ch
 
     script:
     """
@@ -246,7 +245,8 @@ process index_bam {
         saveAs: { filename -> "${sample}.bam.bai" }
 
     input:
-    set sample, file(bam) from marked_bam_index_ch
+    file bam from marked_bam_index_ch
+    val sample from sample_ch
 
     output:
     set sample, file("marked_dup.bam"), file("indexed.bam.bai") into indexed_bam_qc_ch
