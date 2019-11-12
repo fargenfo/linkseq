@@ -239,9 +239,9 @@ process mark_dup {
 }
 
 process index_bam {
-    publishDir "$outdir/aligned/$sample", mode: 'copy', pattern: '*.bam',
+    publishDir "$outdir/bam/aligned/$sample", mode: 'copy', pattern: '*.bam',
         saveAs: { filename -> "${sample}.bam" }
-    publishDir "$outdir/aligned/$sample", mode: 'copy', pattern: '*.bam.bai',
+    publishDir "$outdir/bam/aligned/$sample", mode: 'copy', pattern: '*.bam.bai',
         saveAs: { filename -> "${sample}.bam.bai" }
 
     input:
