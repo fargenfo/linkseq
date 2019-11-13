@@ -3,9 +3,6 @@
 Author: Ólavur Mortensen <olavur@fargen.fo>
 */
 
-// TODO:
-// memory and cpu specifications for processes.
-
 // Input parameters.
 params.fastq_path = null
 params.reference = null
@@ -89,6 +86,8 @@ process interleave_fastq {
     """
 }
 
+
+// Count barcodes in FASTQ.
 process bc_count {
     input:
     file fastq from fastq_count_ch
@@ -106,6 +105,7 @@ process bc_count {
 // How many bins to use?
 // Number of bins seems to have a large effect on how many reads end up in the "non-barcode" (nobc) bin.
 // The ema GitHub recomments 500 bins.
+// Statistical binning of reads, splitting the reads into bins.
 process preproc {
     input:
     file fastq from fastq_preproc_ch
@@ -122,7 +122,7 @@ process preproc {
 }
 
 
-// Construct a readgroup from one of the input FASTQ files.
+// Construct a readgroup from the filename of one of the input FASTQ files.
 process get_samplename {
     input:
     file fastq from fastq_sample_ch
@@ -136,7 +136,7 @@ process get_samplename {
     """
 }
 
-// Construct a readgroup from one of the input FASTQ files.
+// Construct a readgroup from the sequence identifier in one of the input FASTQ files.
 process get_readgroup {
     input:
     file fastq from fastq_rg_ch
@@ -157,9 +157,7 @@ readgroup_ch.into { readgroup_ema_ch; readgroup_bwa_ch }
 // a readgroup object.
 bins_ema_ch = readgroup_ema_ch.combine(bins_ema_ch)
 
-// TODO:
-// read group
-// Maybe it isn't necessary to convert to BAM in this step. sort_bams can take SAM instead, and output BAM.
+// Align reads from each bin with EMA.
 process ema_align {
     input:
     set rg, file(bin) from bins_ema_ch
@@ -174,6 +172,7 @@ process ema_align {
     """
 }
 
+// Align the no-barcode bin. These reads had barcodes that didn't match the whitelist.
 process map_nobc {
     input:
     file nobc_bin from nobc_bin_bwa_ch
@@ -194,7 +193,7 @@ process map_nobc {
 aligned_bam_merge_ch = ema_bam_ch.concat(nobc_bam_ch)
 
 // Merge BAMs from both EMA and BWA.
-// All BAMs from EMA bins have the same readgroup, so the RG and PG headers wil be combined.
+// All BAMs have the same readgroup, so the RG and PG headers wil be combined.
 process merge_bams {
     input:
     file bams from aligned_bam_merge_ch.collect()
@@ -209,6 +208,8 @@ process merge_bams {
     """
 }
 
+
+// Coordinate sort BAM.
 process sort_bam {
     input:
     file bam from merged_bam_sort_ch
@@ -225,6 +226,7 @@ process sort_bam {
 // NOTE:
 // MarkDuplicates has the following option, I wonder why:
 // --BARCODE_TAG:String          Barcode SAM tag (ex. BC for 10X Genomics)  Default value: null.                          
+// Mark duplicates in BAM.
 process mark_dup {
     input:
     file bam from sorted_bam_markdup_ch
@@ -238,6 +240,7 @@ process mark_dup {
     """
 }
 
+// Index the BAM.
 process index_bam {
     publishDir "$outdir/bam/aligned/$sample", mode: 'copy', pattern: '*.bam',
         saveAs: { filename -> "${sample}.bam" }
