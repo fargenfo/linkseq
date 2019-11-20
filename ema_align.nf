@@ -260,9 +260,6 @@ process index_bam {
     """
 }
 
-
-// FIXME:
-// Qualimap gives some Java error related to fonts.
 // Run Qualimap for QC metrics of aligned and recalibrated BAM.
 process qualimap_analysis {
     publishDir "$outdir/bam/aligned/$sample/qc", mode: 'copy'
