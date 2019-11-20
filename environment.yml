@@ -6,7 +6,8 @@ channels:
   - conda-forge
 
 dependencies:
-  - bioconda::fastqc=0.11.7
+  - Freenome::bcl2fastq=2.20
+  - bioconda::fastqc=0.11.8
   - bioconda::ema=0.6.2
   - bioconda::gatk4=4.1.0.0
   - bioconda::qualimap=2.2.2a
