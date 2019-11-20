@@ -72,8 +72,8 @@ process align_reads {
     longranger align --id=$sample \
         --reference=$reference \
         --fastqs=$fastq_path \
-        --localcores=${params.threads} \
-        --localmem=${params.mem}
+        --localcores=${task.cpus} \
+        --localmem=${task.memory}
     """
 }
 
@@ -111,8 +111,8 @@ process qualimap_analysis {
         -outdir "qualimap_results" \
         --skip-duplicated \
         --collect-overlap-pairs \
-        -nt ${params.threads} \
-        --java-mem-size=${params.mem}G
+        -nt ${task.cpus} \
+        --java-mem-size=${task.memory.toGiga()}G
     """
 }
 
