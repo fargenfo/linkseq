@@ -95,9 +95,6 @@ fastq_ch = fastq_samplenames_ch.flatten()
 // Since this process is only concatenating (cat) and zipping files, it doesn't need much memory or many cores.
 // We use the "when" directive to avoid processing the "Undetermined" sample.
 process merge {
-    memory = "250MB"
-    cpus = 1
-
     publishDir "$outdir/fastq_out/$sample", mode: 'copy'
 
     input:
@@ -127,9 +124,6 @@ fastq_qc_ch = fastq_qc_ch.groupTuple()
 
 // Run FastQC for QC metrics of raw data.
 process fastqc_analysis {
-    memory = "1 GB"
-    cpus = 4
-
     publishDir "$outdir/fastqc/$sample", mode: 'copy', pattern: '{*.zip,*.html}',
         saveAs: {filename -> filename.indexOf('.zip') > 0 ? "zips/$filename" : "$filename"}
     publishDir "$outdir/fastqc/$sample", mode: 'copy', pattern: '.command.log',
