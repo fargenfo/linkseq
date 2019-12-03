@@ -1,0 +1,7 @@
+
+Obtained from:
+https://earray.chem.agilent.com/suredesign/search.htm
+
+Search for "SureSelect Human All Exon V6 UTR" in Agilent Catalog. Choose hg38.
+
+The file S07604624_Padded.bed has been edited so that the first line ("#browser position chr1:11981-12351") is commented out with a "#", because not all BED readers correctly skip this line. If other files are used, this can be done as well.

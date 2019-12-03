@@ -59,3 +59,16 @@ nextflow demuxlink/main.nf --rundir tiny-bcl-2.2.0 --outdir results --sampleshee
 
 And get the FASTQ files in `results/fastq_out/Sample1/outs` and the FastQC reports in `results/fastqc/Sample1`.
 
+**FIXME:** How to run rest of pipeline.
+
+## Reference resources
+
+To run this pipeline you need some reference databases from the [GATK resource bundle](https://software.broadinstitute.org/gatk/download/bundle), as well as an exome targets file.
+
+The `reference/gatk_bundle.sh` script downloads all the resources needed from the GATK resource bundle; note that if the GATK dev team change any of these resources, this script may fail. We downloaded the resources from the site below on the 22/03-2019:
+
+> GATK resource bundle
+> https://console.cloud.google.com/storage/browser/genomics-public-data/resources/broad/hg38/v0
+
+Our particular sequencing experiment uses the Agilent SureSelect Human All Exon V6 UTR kit to capture the exome. `reference/sureselect_human_all_exon_v6_utr_grch38` contains the target BED file we use and some details are in the README.
+
