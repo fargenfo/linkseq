@@ -252,7 +252,7 @@ process index_bam {
     val sample from sample_ch
 
     output:
-    set sample, file("marked_dup.bam"), file("indexed.bam.bai") into indexed_bam_qc_ch
+    set sample, file("indexed.bam"), file("indexed.bam.bai") into indexed_bam_qc_ch
 
     script:
     """
