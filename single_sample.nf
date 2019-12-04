@@ -57,10 +57,10 @@ println "outdir             : ${params.outdir}"
 println '=================================='
 
 // Get file handlers for input files.
-reference = file(params.reference)
-targets = file(params.targets)
-whitelist = file(params.whitelist)
-dbsnp = file(params.dbsnp)
+reference = file(params.reference, checkIfExists: true)
+targets = file(params.targets, checkIfExists: true)
+whitelist = file(params.whitelist, checkIfExists: true)
+dbsnp = file(params.dbsnp, checkIfExists: true)
 outdir = file(params.outdir)
 
 /*
@@ -84,6 +84,12 @@ fastq_r2.each { item ->
 }
 
 println '==================================\n'
+
+
+// Check that there is at least one lane and that there is the same number of lanes for both reads.
+assert fastq_r1.size() > 0, 'The "fastq_r1" input parameter pattern did not match any files.'
+assert fastq_r2.size() > 0, 'The "fastq_r2" input parameter pattern did not match any files.'
+assert fastq_r1.size() == fastq_r2.size(), 'There is an unequal number of lanes in read 1 and read 2; the fastq_r1 and fastq_r2 patterns matched an unequal number of files.'
 
 /*
 First, we align the data to reference with EMA. In order to do so, we need to do some pre-processing, including,
