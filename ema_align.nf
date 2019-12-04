@@ -252,11 +252,11 @@ process index_bam {
     val sample from sample_ch
 
     output:
-    set sample, file("indexed.bam"), file("indexed.bam.bai") into indexed_bam_qc_ch
+    set sample, file("$bam"), file("${bam}.bai") into indexed_bam_qc_ch
 
     script:
     """
-    gatk BuildBamIndex -I $bam -O "indexed.bam.bai"
+    gatk BuildBamIndex -I $bam -O ${bam}.bai
     """
 }
 
