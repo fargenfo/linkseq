@@ -3,11 +3,22 @@
 Author: Ólavur Mortensen <olavur@fargen.fo>
 */
 
+
+/*
+TODO:
+
+* overwrite: true in publishDir?
+* consistent channel naming convention
+
+*/
+
 // Input parameters.
-params.bam_paths = null
+params.fastq_path = null
 params.reference = null
-params.dbsnp = null
 params.targets = null
+params.whitelist = null
+params.bcbins = null
+params.dbsnp = null
 params.outdir = null
 params.help = false
 
@@ -25,35 +36,239 @@ if (params.help){
 }
 
 // Make sure necessary input parameters are assigned.
-assert params.bam_paths != null, 'Input parameter "bam_paths" cannot be unasigned.'
+assert params.fastq_path != null, 'Input parameter "fastq_path" cannot be unasigned.'
 assert params.reference != null, 'Input parameter "reference" cannot be unasigned.'
-assert params.dbsnp != null, 'Input parameter "dbsnp" cannot be unasigned.'
 assert params.targets != null, 'Input parameter "targets" cannot be unasigned.'
+assert params.whitelist != null, 'Input parameter "whitelist" cannot be unasigned.'
+assert params.bcbins != null, 'Input parameter "bcbins" cannot be unasigned.'
+assert params.dbsnp != null, 'Input parameter "dbsnp" cannot be unasigned.'
 assert params.outdir != null, 'Input parameter "outdir" cannot be unasigned.'
 
 println "P I P E L I N E     I P U T S    "
 println "================================="
-println "bam_paths          : ${params.bam_paths}"
+println "fastq_path         : ${params.fastq_path}"
 println "reference          : ${params.reference}"
-println "dbsnp              : ${params.dbsnp}"
 println "targets            : ${params.targets}"
+println "whitelist          : ${params.whitelist}"
+println "bcbins             : ${params.bcbins}"
+println "dbsnp              : ${params.dbsnp}"
 println "outdir             : ${params.outdir}"
 
 // Get file handlers for input files.
 reference = file(params.reference)
-dbsnp = file(params.dbsnp)
 targets = file(params.targets)
+whitelist = file(params.whitelist)
+dbsnp = file(params.dbsnp)
+outdir = file(params.outdir)
 
+// Get lists of the read 1 and 2 FASTQ files.
+// We assume two read pairs, R1 and R2, and that it is compressed. Multiple lanes work.
+file_r1 = file(params.fastq_path + '/*R1*.gz')
+file_r2 = file(params.fastq_path + '/*R2*.gz')
 
-// Turn the file with BAM paths into a channel with [sample, BAM path, BAI path] tuples.
-Channel.fromPath(params.bam_paths)
-    .splitCsv(header: true)
-    .map { it -> tuple(it.sample, file(it.bam_path), file(it.bai_path)) }
-    .into { aligned_bam_prepare_ch; aligned_bam_apply_ch; aligned_bam_print_ch }
+// A single FASTQ file to get the sample name from and to construct the readgroup from.
+Channel.fromPath(params.fastq_path + '/*L001*R1*.gz').into { fastq_sample_ch; fastq_rg_ch }
 
-println("Processing data:\nSample\t\tBAM path\t\tBAI path")
-aligned_bam_print_ch.subscribe { println(it[0] + "\t" + it[1] + "\t" + it[2]) }
+/*
+First, we align the data to reference with EMA. In order to do so, we need to do some pre-processing, including,
+but not limited to, merging lanes, counting barcodes, and binning reads.
+*/
 
+// Merge all lanes in read 1 and 2.
+process merge_lanes {
+    output:
+    file 'R1.fastq' into fastq_r1_ch
+    file 'R2.fastq' into fastq_r2_ch
+
+    script:
+    r1_list = file_r1.join(' ')
+    r2_list = file_r2.join(' ')
+    """
+    zcat $r1_list > 'R1.fastq'
+    zcat $r2_list > 'R2.fastq'
+    """
+}
+
+// Interleave reads 1 and 2.
+process interleave_fastq {
+    input:
+    file r1 from fastq_r1_ch
+    file r2 from fastq_r2_ch
+
+    output:
+    file 'interleaved.fastq' into fastq_count_ch, fastq_preproc_ch
+
+    script:
+    """
+    interleave_fastq.sh $r1 $r2 > 'interleaved.fastq'
+    """
+}
+
+// Count barcodes in FASTQ.
+process bc_count {
+    input:
+    file fastq from fastq_count_ch
+
+    output:
+    set file('*.ema-fcnt'), file('*.ema-ncnt') into bc_count_ch
+
+    script:
+    """
+    cat $fastq | ema count -w $whitelist -o bc_count
+    """
+}
+
+// Statistical binning of reads, splitting the reads into bins.
+// TODO:
+// How many bins to use?
+// Number of bins seems to have a large effect on how many reads end up in the "non-barcode" (nobc) bin.
+// The ema GitHub recomments 500 bins.
+// Barcode correction report?
+process preproc {
+    input:
+    file fastq from fastq_preproc_ch
+    set file(fcnt), file(ncnt) from bc_count_ch
+
+    output:
+    file "preproc_dir/ema-bin-*" into bins_ema_ch mode flatten
+    file "preproc_dir/ema-nobc" into nobc_bin_bwa_ch
+
+    script:
+    """
+    cat $fastq | ema preproc -h -w $whitelist -n ${params.bcbins} -t ${task.cpus} -o 'preproc_dir' $ncnt
+    """
+}
+
+// Construct a readgroup from the filename of one of the input FASTQ files.
+process get_samplename {
+    input:
+    file fastq from fastq_sample_ch
+
+    output:
+    stdout sample_ch
+
+    script:
+    """
+    get_samplenames.py $fastq
+    """
+}
+
+// Construct a readgroup from the sequence identifier in one of the input FASTQ files.
+process get_readgroup {
+    input:
+    file fastq from fastq_rg_ch
+
+    output:
+    stdout readgroup_ch
+
+    script:
+    """
+    get_readgroups.py $fastq
+    """
+}
+
+// Duplicate the readgroup channel.
+readgroup_ch.into { readgroup_ema_ch; readgroup_bwa_ch }
+
+// Combine the readgroup channel with the EMA bins channel so that each instance of the ema_align process gets
+// a readgroup object.
+bins_ema_ch = readgroup_ema_ch.combine(bins_ema_ch)
+
+// Align reads from each bin with EMA.
+process ema_align {
+    input:
+    set rg, file(bin) from bins_ema_ch
+
+    output:
+    file "${bin}.bam" into ema_bam_ch
+
+    script:
+    """
+    ema align -t ${task.cpus} -d -r $reference -R '$rg' -s $bin | \
+        samtools view -b -o ${bin}.bam
+    """
+}
+
+// Align the no-barcode bin. These reads had barcodes that didn't match the whitelist.
+process map_nobc {
+    input:
+    file nobc_bin from nobc_bin_bwa_ch
+    val rg from readgroup_bwa_ch
+
+    output:
+    file "nobc.bam" into nobc_bam_ch
+
+    script:
+    """
+    bwa mem -p -t ${task.cpus} -M -R '$rg' $reference $nobc_bin | \
+        samtools view -b -o nobc.bam
+    """
+}
+
+// Combine BAMs from EMA and BWA into a single channel for merging.
+aligned_bam_merge_ch = ema_bam_ch.concat(nobc_bam_ch)
+
+// Merge BAMs from both EMA and BWA.
+// All BAMs have the same readgroup, so the RG and PG headers wil be combined.
+process merge_bams {
+    input:
+    file bams from aligned_bam_merge_ch.collect()
+
+    output:
+    file "merged.bam" into merged_bam_sort_ch
+
+    script:
+    bam_list = (bams as List).join(' ')
+    """
+    samtools merge -@ ${task.cpus} -O bam -l 0 -c -p "merged.bam" $bam_list
+    """
+}
+
+// Coordinate sort BAM.
+process sort_bam {
+    input:
+    file bam from merged_bam_sort_ch
+
+    output:
+    file "sorted.bam" into sorted_bam_markdup_ch
+
+    script:
+    """
+    samtools sort -@ ${task.cpus} -O bam -l 0 -m 4G -o "sorted.bam" $bam
+    """
+}
+
+// Mark duplicates in BAM.
+// NOTE:
+// MarkDuplicates has the following option, I wonder why:
+// --BARCODE_TAG:String          Barcode SAM tag (ex. BC for 10X Genomics)  Default value: null.                          
+process mark_dup {
+    input:
+    file bam from sorted_bam_markdup_ch
+
+    output:
+    file "marked_dup.bam" into marked_bam_index_ch
+
+    script:
+    """
+    gatk MarkDuplicates -I $bam -O "marked_dup.bam" -M "marked_dup_metrics.txt"
+    """
+}
+
+// Index the BAM.
+process index_bam {
+    input:
+    file bam from marked_bam_index_ch
+    val sample from sample_ch
+
+    output:
+    set sample, file("$bam"), file("${bam}.bai") into indexed_bam_prepare_ch, indexed_bam_apply_ch
+
+    script:
+    """
+    gatk BuildBamIndex -I $bam -O "${bam}.bai"
+    """
+}
 
 /*
 The next three processes, prepare_bqsr_table, analyze_covariates, and apply_bqsr, deal with base quality score
@@ -61,11 +276,10 @@ recalibration, in preparation for GATK best practices.
 BQSR: https://software.broadinstitute.org/gatk/documentation/article?id=44
 */
 
-
 // Generate recalibration table for BQSR.
 process prepare_bqsr_table {
     input:
-    set sample, file(bam), file(bai) from aligned_bam_prepare_ch
+    set sample, file(bam), file(bai) from indexed_bam_prepare_ch
 
     output:
     set sample, file('bqsr.table') into bqsr_table_ch, bqsr_table_copy_ch
@@ -85,7 +299,7 @@ process prepare_bqsr_table {
 
 // Evaluate BQSR.
 process analyze_covariates {
-    publishDir "${params.outdir}/bam/analyze_covariates", mode: 'copy', overwrite: true, saveAs: { filename -> "${sample}_$filename" }
+    publishDir "$outdir/bam/recalibrated/$sample", mode: 'copy'
 
     input:
     set sample, file(bqsr_table) from bqsr_table_ch
@@ -102,13 +316,13 @@ process analyze_covariates {
 }
 
 // Pair the BAM and the BQSR table in one "set" channel.
-data_apply_bqsr_ch = aligned_bam_apply_ch.join(bqsr_table_copy_ch)
+data_apply_bqsr_ch = indexed_bam_apply_ch.join(bqsr_table_copy_ch)
 
 // Apply recalibration to BAM file.
 process apply_bqsr {
-    publishDir "${params.outdir}/bam/recalibrated/$sample", mode: 'copy', pattern: '*.bam',
+    publishDir "$outdir/bam/recalibrated/$sample", mode: 'copy', pattern: '*.bam',
         saveAs: { filename -> "${sample}.bam" }
-    publishDir "${params.outdir}/bam/recalibrated/$sample", mode: 'copy', pattern: '*.bam.bai',
+    publishDir "$outdir/bam/recalibrated/$sample", mode: 'copy', pattern: '*.bam.bai',
         saveAs: { filename -> "${sample}.bam.bai" }
 
     input:
@@ -134,7 +348,7 @@ process apply_bqsr {
 
 // Call variants in sample with HapltypeCaller, yielding a GVCF.
 process call_sample {
-    publishDir "${params.outdir}/gvcf", mode: 'copy', overwrite: true
+    publishDir "$outdir/gvcf", mode: 'copy', overwrite: true
 
     input:
     set sample, file(bam), file(bai) from recalibrated_bam_call_ch
@@ -169,12 +383,9 @@ process call_sample {
 Below we perform QC of data.
 */
 
-/*
-
 // Run Qualimap for QC metrics of recalibrated BAM.
 process qualimap_analysis {
-    publishDir "${params.outdir}/bamqc", mode: 'copy',
-        saveAs: {filename -> "$sample"}
+    publishDir "$outdir/bam/recalibrated/$sample", mode: 'copy'
 
     input:
     set sample, file(bam), file(bai) from recalibrated_bam_qualimap_ch
@@ -211,4 +422,3 @@ process qualimap_analysis {
     """
 }
 
-*/
