@@ -66,7 +66,7 @@ file_r1 = file(params.fastq_path + '/*R1*.gz')
 file_r2 = file(params.fastq_path + '/*R2*.gz')
 
 // A single FASTQ file to get the sample name from and to construct the readgroup from.
-Channel.fromPath(params.fastq_path + '/*L001*R1*.gz').into { fastq_sample_ch; fastq_rg_ch }
+Channel.fromPath(params.fastq_path + '/*L001*R1*.gz').into { fastq_get_samplenames_ch; fastq_get_rg_ch }
 
 /*
 First, we align the data to reference with EMA. In order to do so, we need to do some pre-processing, including,
@@ -141,7 +141,7 @@ process preproc {
 // Construct a readgroup from the filename of one of the input FASTQ files.
 process get_samplename {
     input:
-    file fastq from fastq_sample_ch
+    file fastq from fastq_get_samplenames_ch
 
     output:
     stdout sample_ch
@@ -155,7 +155,7 @@ process get_samplename {
 // Construct a readgroup from the sequence identifier in one of the input FASTQ files.
 process get_readgroup {
     input:
-    file fastq from fastq_rg_ch
+    file fastq from fastq_get_rg_ch
 
     output:
     stdout readgroup_ch
@@ -281,7 +281,7 @@ process prepare_bqsr_table {
     set sample, file(bam), file(bai) from indexed_bam_prepare_ch
 
     output:
-    set sample, file('bqsr.table') into bqsr_table_ch, bqsr_table_copy_ch
+    set sample, file('bqsr.table') into bqsr_table_analyze_ch, bqsr_table_apply_ch
 
     script:
     """
@@ -301,7 +301,7 @@ process analyze_covariates {
     publishDir "$outdir/bam/recalibrated/$sample", mode: 'copy', overwrite: true,
 
     input:
-    set sample, file(bqsr_table) from bqsr_table_ch
+    set sample, file(bqsr_table) from bqsr_table_analyze_ch
 
     output:
     set sample, file('AnalyzeCovariates.pdf') into bqsr_analysis_ch
@@ -315,7 +315,7 @@ process analyze_covariates {
 }
 
 // Pair the BAM and the BQSR table in one "set" channel.
-data_apply_bqsr_ch = indexed_bam_apply_ch.join(bqsr_table_copy_ch)
+data_apply_bqsr_ch = indexed_bam_apply_ch.join(bqsr_table_apply_ch)
 
 // Apply recalibration to BAM file.
 process apply_bqsr {
