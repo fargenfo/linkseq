@@ -54,7 +54,7 @@ Using that the index `SI-GA-C5` corresponds to the four octamers `CGACTTGA,TACAG
 Provided that you've set installed all the software in `environment.yml` (or maybe used this pipeline's Docker container at https://hub.docker.com/r/olavurmortensen/demuxlink), you should be able to run the pipeline like this:
 
 ```
-nextflow demuxlink/main.nf --rundir tiny-bcl-2.2.0 --outdir results --samplesheet tiny-bcl-samplesheet-2.1.0.csv
+nextflow exolink/scripts/demux/demux.nf --rundir tiny-bcl-2.2.0 --outdir results --samplesheet tiny-bcl-samplesheet-2.1.0.csv
 ```
 
 And get the FASTQ files in `results/fastq_out/Sample1/outs` and the FastQC reports in `results/fastqc/Sample1`.
