@@ -64,10 +64,12 @@ dbsnp = file(params.dbsnp, checkIfExists: true)
 outdir = file(params.outdir)
 
 /*
-NOTE:
+TODO:
 
 * Could check if the file is compressed, using cheking that item.getExtension() is 'gz'.
 * Could check that there there are matching lanes, R1 and R2 for L0001 and so on.
+* Check that FASTQs are "valid", e.g. with FastQValidator:
+    * https://genome.sph.umich.edu/wiki/FastQValidator
 
 */
 
