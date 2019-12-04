@@ -11,7 +11,8 @@ TODO:
 */
 
 // Input parameters.
-params.fastq_path = null
+params.fastq_r1 = null
+params.fastq_r2 = null
 params.reference = null
 params.targets = null
 params.whitelist = null
@@ -34,7 +35,8 @@ if (params.help){
 }
 
 // Make sure necessary input parameters are assigned.
-assert params.fastq_path != null, 'Input parameter "fastq_path" cannot be unasigned.'
+assert params.fastq_r1 != null, 'Input parameter "fastq_r1" cannot be unasigned.'
+assert params.fastq_r2 != null, 'Input parameter "fastq_r2" cannot be unasigned.'
 assert params.reference != null, 'Input parameter "reference" cannot be unasigned.'
 assert params.targets != null, 'Input parameter "targets" cannot be unasigned.'
 assert params.whitelist != null, 'Input parameter "whitelist" cannot be unasigned.'
@@ -44,13 +46,15 @@ assert params.outdir != null, 'Input parameter "outdir" cannot be unasigned.'
 
 println "P I P E L I N E     I P U T S    "
 println "================================="
-println "fastq_path         : ${params.fastq_path}"
+println "fastq_r1           : ${params.fastq_r1}"
+println "fastq_r2           : ${params.fastq_r2}"
 println "reference          : ${params.reference}"
 println "targets            : ${params.targets}"
 println "whitelist          : ${params.whitelist}"
 println "bcbins             : ${params.bcbins}"
 println "dbsnp              : ${params.dbsnp}"
 println "outdir             : ${params.outdir}"
+println '=================================='
 
 // Get file handlers for input files.
 reference = file(params.reference)
@@ -59,13 +63,27 @@ whitelist = file(params.whitelist)
 dbsnp = file(params.dbsnp)
 outdir = file(params.outdir)
 
-// Get lists of the read 1 and 2 FASTQ files.
-// We assume two read pairs, R1 and R2, and that it is compressed. Multiple lanes work.
-file_r1 = file(params.fastq_path + '/*R1*.gz')
-file_r2 = file(params.fastq_path + '/*R2*.gz')
+/*
+NOTE:
 
-// A single FASTQ file to get the sample name from and to construct the readgroup from.
-Channel.fromPath(params.fastq_path + '/*L001*R1*.gz').into { fastq_get_samplenames_ch; fastq_get_rg_ch }
+* Could check if the file is compressed, using cheking that item.getExtension() is 'gz'.
+* Could check that there there are matching lanes, R1 and R2 for L0001 and so on.
+
+*/
+
+// Get lists of the read 1 and 2 FASTQ files.
+fastq_r1 = file(params.fastq_r1)
+fastq_r2 = file(params.fastq_r2)
+
+println '\nFASTQ path\t\t\t\t\tRead in pair\tSize (bytes)\tNumber of reads'
+fastq_r1.each { item ->
+    println "${item.getName()}\t\tFirst\t\t${item.size()}\t\t${item.countFastq()}"
+}
+fastq_r2.each { item ->
+    println "${item.getName()}\t\tSecond\t\t${item.size()}\t\t${item.countFastq()}"
+}
+
+println '==================================\n'
 
 /*
 First, we align the data to reference with EMA. In order to do so, we need to do some pre-processing, including,
@@ -75,12 +93,12 @@ but not limited to, merging lanes, counting barcodes, and binning reads.
 // Merge all lanes in read 1 and 2.
 process merge_lanes {
     output:
-    file 'R1.fastq' into fastq_r1_ch
-    file 'R2.fastq' into fastq_r2_ch
+    file 'R1.fastq' into merged_fastq_r1_ch
+    file 'R2.fastq' into merged_fastq_r2_ch
 
     script:
-    r1_list = file_r1.join(' ')
-    r2_list = file_r2.join(' ')
+    r1_list = fastq_r1.join(' ')
+    r2_list = fastq_r2.join(' ')
     """
     zcat $r1_list > 'R1.fastq'
     zcat $r2_list > 'R2.fastq'
@@ -90,8 +108,8 @@ process merge_lanes {
 // Interleave reads 1 and 2.
 process interleave_fastq {
     input:
-    file r1 from fastq_r1_ch
-    file r2 from fastq_r2_ch
+    file r1 from merged_fastq_r1_ch
+    file r2 from merged_fastq_r2_ch
 
     output:
     file 'interleaved.fastq' into fastq_count_ch, fastq_preproc_ch
@@ -139,13 +157,11 @@ process preproc {
 
 // Construct a readgroup from the filename of one of the input FASTQ files.
 process get_samplename {
-    input:
-    file fastq from fastq_get_samplenames_ch
-
     output:
     stdout sample_ch
 
     script:
+    fastq = fastq_r1[0]
     """
     get_samplenames.py $fastq
     """
@@ -153,13 +169,11 @@ process get_samplename {
 
 // Construct a readgroup from the sequence identifier in one of the input FASTQ files.
 process get_readgroup {
-    input:
-    file fastq from fastq_get_rg_ch
-
     output:
     stdout readgroup_ch
 
     script:
+    fastq = fastq_r1[0]
     """
     get_readgroups.py $fastq
     """
@@ -297,7 +311,7 @@ process prepare_bqsr_table {
 
 // Evaluate BQSR.
 process analyze_covariates {
-    publishDir "$outdir/bam/recalibrated/$sample", mode: 'copy', overwrite: true,
+    publishDir "$outdir/bam/recalibrated/$sample", mode: 'copy', overwrite: true
 
     input:
     set sample, file(bqsr_table) from bqsr_table_analyze_ch
@@ -383,7 +397,7 @@ Below we perform QC of data.
 
 // Run Qualimap for QC metrics of recalibrated BAM.
 process qualimap_analysis {
-    publishDir "$outdir/bam/recalibrated/$sample", mode: 'copy', overwrite: true,
+    publishDir "$outdir/bam/recalibrated/$sample", mode: 'copy', overwrite: true
 
     input:
     set sample, file(bam), file(bai) from recalibrated_bam_qualimap_ch
