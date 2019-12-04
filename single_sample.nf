@@ -7,7 +7,6 @@ Author: Ólavur Mortensen <olavur@fargen.fo>
 /*
 TODO:
 
-* consistent channel naming convention
 
 */
 
