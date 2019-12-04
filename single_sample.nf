@@ -7,7 +7,6 @@ Author: Ólavur Mortensen <olavur@fargen.fo>
 /*
 TODO:
 
-* overwrite: true in publishDir?
 * consistent channel naming convention
 
 */
@@ -299,7 +298,7 @@ process prepare_bqsr_table {
 
 // Evaluate BQSR.
 process analyze_covariates {
-    publishDir "$outdir/bam/recalibrated/$sample", mode: 'copy'
+    publishDir "$outdir/bam/recalibrated/$sample", mode: 'copy', overwrite: true,
 
     input:
     set sample, file(bqsr_table) from bqsr_table_ch
@@ -320,9 +319,9 @@ data_apply_bqsr_ch = indexed_bam_apply_ch.join(bqsr_table_copy_ch)
 
 // Apply recalibration to BAM file.
 process apply_bqsr {
-    publishDir "$outdir/bam/recalibrated/$sample", mode: 'copy', pattern: '*.bam',
+    publishDir "$outdir/bam/recalibrated/$sample", mode: 'copy', pattern: '*.bam', overwrite: true,
         saveAs: { filename -> "${sample}.bam" }
-    publishDir "$outdir/bam/recalibrated/$sample", mode: 'copy', pattern: '*.bam.bai',
+    publishDir "$outdir/bam/recalibrated/$sample", mode: 'copy', pattern: '*.bam.bai', overwrite: true,
         saveAs: { filename -> "${sample}.bam.bai" }
 
     input:
@@ -385,7 +384,7 @@ Below we perform QC of data.
 
 // Run Qualimap for QC metrics of recalibrated BAM.
 process qualimap_analysis {
-    publishDir "$outdir/bam/recalibrated/$sample", mode: 'copy'
+    publishDir "$outdir/bam/recalibrated/$sample", mode: 'copy', overwrite: true,
 
     input:
     set sample, file(bam), file(bai) from recalibrated_bam_qualimap_ch
