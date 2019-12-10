@@ -13,8 +13,6 @@ params.kGphase1 = null
 params.kGphase3 = null
 params.omni = null
 params.hapmap = null
-params.threads = null
-params.mem = null
 params.outdir = null
 params.help = false
 
@@ -40,8 +38,6 @@ assert params.kGphase3 != null, 'Input parameter "kGphase3" cannot be unasigned.
 assert params.omni != null, 'Input parameter "omni" cannot be unasigned.'
 assert params.hapmap != null, 'Input parameter "hapmap" cannot be unasigned.'
 assert params.targets != null, 'Input parameter "targets" cannot be unasigned.'
-assert params.threads != null, 'Input parameter "threads" cannot be unasigned.'
-assert params.mem != null, 'Input parameter "mem" cannot be unasigned.'
 assert params.outdir != null, 'Input parameter "outdir" cannot be unasigned.'
 
 println "P I P E L I N E     I P U T S    "
@@ -55,8 +51,6 @@ println "kGphase3           : ${params.kGphase3}"
 println "omni               : ${params.omni}"
 println "hapmap             : ${params.hapmap}"
 println "targets            : ${params.targets}"
-println "threads            : ${params.threads}"
-println "mem                : ${params.mem}"
 println "outdir             : ${params.outdir}"
 
 // Get file handlers for input files.
