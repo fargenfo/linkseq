@@ -73,25 +73,47 @@ TODO:
 
 */
 
-// Get lists of the read 1 and 2 FASTQ files.
-fastq_r1 = file(params.fastq_r1)
-fastq_r2 = file(params.fastq_r2)
+// Get channels of the read 1 and 2 FASTQ files.
+Channel.fromPath(params.fastq_r1).into { fastq_r1_print_ch; fastq_r1_check_ch; fastq_r1_merge_ch; fastq_readgroup_ch; fastq_samplename_ch }
+Channel.fromPath(params.fastq_r2).into { fastq_r2_print_ch; fastq_r2_check_ch; fastq_r2_merge_ch }
 
-println '\nFASTQ path\t\t\t\t\tRead in pair\tSize (bytes)\tNumber of reads'
-fastq_r1.each { item ->
-    println "${item.getName()}\t\tFirst\t\t${item.size()}\t\t${item.countFastq()}"
+// Check that the there are at least one FASTQ files for read 1 and 2, and that there are an equal number of files for read 1 and 2.
+process check_fastq {
+    input:
+    val fastq_r1 from fastq_r1_check_ch.toList()
+    val fastq_r2 from fastq_r2_check_ch.toList()
+    
+    output:
+    val 'done' into check_fastq_status_ch
+
+    exec:
+    assert fastq_r1.size() > 0, 'The "fastq_r1" input parameter pattern did not match any files.'
+    assert fastq_r2.size() > 0, 'The "fastq_r2" input parameter pattern did not match any files.'
+    assert fastq_r1.size() == fastq_r2.size(), 'There is an unequal number of lanes in read 1 and read 2; the fastq_r1 and fastq_r2 patterns matched an unequal number of files.'
 }
-fastq_r2.each { item ->
-    println "${item.getName()}\t\tSecond\t\t${item.size()}\t\t${item.countFastq()}"
+
+// Print some info about the input FASTQ files.
+process print_fastq {
+    echo true
+    
+    input:
+    val status from check_fastq_status_ch
+    val fastq_r1 from fastq_r1_print_ch.toList()
+    val fastq_r2 from fastq_r2_print_ch.toList()
+    
+    output:
+    val 'done' into print_fastq_status_ch
+
+    exec:
+    println '\nFASTQ path\t\t\t\t\tRead in pair\tSize (bytes)\tNumber of reads'
+    fastq_r1.each { item ->
+        println "${item.getName()}\t\tFirst\t\t${item.size()}\t\t${item.countFastq()}"
+    }
+    fastq_r2.each { item ->
+        println "${item.getName()}\t\tSecond\t\t${item.size()}\t\t${item.countFastq()}"
+    }
+    println '==================================\n'
 }
-
-println '==================================\n'
-
-
-// Check that there is at least one lane and that there is the same number of lanes for both reads.
-assert fastq_r1.size() > 0, 'The "fastq_r1" input parameter pattern did not match any files.'
-assert fastq_r2.size() > 0, 'The "fastq_r2" input parameter pattern did not match any files.'
-assert fastq_r1.size() == fastq_r2.size(), 'There is an unequal number of lanes in read 1 and read 2; the fastq_r1 and fastq_r2 patterns matched an unequal number of files.'
 
 /*
 First, we align the data to reference with EMA. In order to do so, we need to do some pre-processing, including,
@@ -100,6 +122,11 @@ but not limited to, merging lanes, counting barcodes, and binning reads.
 
 // Merge all lanes in read 1 and 2.
 process merge_lanes {
+    input:
+    val status from print_fastq_status_ch
+    val fastq_r1 from fastq_r1_merge_ch.toList()
+    val fastq_r2 from fastq_r2_merge_ch.toList()
+
     output:
     file 'R1.fastq' into merged_fastq_r1_ch
     file 'R2.fastq' into merged_fastq_r2_ch
@@ -165,11 +192,15 @@ process preproc {
 
 // Construct a readgroup from the filename of one of the input FASTQ files.
 process get_samplename {
+    input:
+    file fastq_list from fastq_samplename_ch.toList()
+
     output:
     stdout sample_ch
 
     script:
-    fastq = fastq_r1[0]
+    // Use just the first FASTQ file in the list.
+    fastq = fastq_list[0]
     """
     get_samplenames.py $fastq
     """
@@ -177,11 +208,15 @@ process get_samplename {
 
 // Construct a readgroup from the sequence identifier in one of the input FASTQ files.
 process get_readgroup {
+    input:
+    file fastq_list from fastq_readgroup_ch.toList()
+
     output:
     stdout readgroup_ch
 
     script:
-    fastq = fastq_r1[0]
+    // Use just the first FASTQ file in the list.
+    fastq = fastq_list[0]
     """
     get_readgroups.py $fastq
     """
