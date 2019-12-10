@@ -92,11 +92,14 @@ process check_fastq {
     assert fastq_r1.size() == fastq_r2.size(), 'There is an unequal number of lanes in read 1 and read 2; the fastq_r1 and fastq_r2 patterns matched an unequal number of files.'
 }
 
+random_ch = Channel.fromPath('/dev/urandom')
+
 // Print some info about the input FASTQ files.
 process print_fastq {
     echo true
     
     input:
+    file random from random_ch
     val status from check_fastq_status_ch
     val fastq_r1 from fastq_r1_print_ch.toList()
     val fastq_r2 from fastq_r2_print_ch.toList()
