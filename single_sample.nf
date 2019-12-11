@@ -66,6 +66,8 @@ outdir = file(params.outdir)
 /*
 TODO:
 
+* Check that all read 1 and 2 FASTQs have matching number of records. Not only would the alternative be an issue with
+the original data, it would screw up the merging process.
 * Could check if the file is compressed, using cheking that item.getExtension() is 'gz'.
 * Could check that there there are matching lanes, R1 and R2 for L0001 and so on.
 * Check that FASTQs are "valid", e.g. with FastQValidator:
@@ -105,8 +107,13 @@ process merge_lanes {
     file 'R2.fastq' into merged_fastq_r2_ch
 
     script:
-    r1_list = fastq_r1.join(' ')
-    r2_list = fastq_r2.join(' ')
+    // Sort the FASTQ lists so that they are concatenated in the same order.
+    if (r1_list instanceof List) {
+        r1_list = fastq_r1.sort()
+        r1_list = r1_list.join(' ')
+        r2_list = fastq_r2.sort()
+        r2_list = r2_list.join(' ')
+    }
     """
     zcat $r1_list > 'R1.fastq'
     zcat $r2_list > 'R2.fastq'
