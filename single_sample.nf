@@ -97,8 +97,8 @@ assert fastq_r1.size() == fastq_r2.size(), 'There is an unequal number of lanes 
 
 
 // Get FASTQ paths in channels.
-fastq_r1_ch = Channel.fromPath(params.fastq_r1)
-fastq_r2_ch = Channel.fromPath(params.fastq_r2)
+Channel.fromPath(params.fastq_r1).into { fastq_r1_merge_ch; fastq_r1_samplename_ch; fastq_r1_readgroup_ch }
+fastq_r2_merge_ch = Channel.fromPath(params.fastq_r2)
 
 /*
 First, we align the data to reference with EMA. In order to do so, we need to do some pre-processing, including,
@@ -108,8 +108,8 @@ but not limited to, merging lanes, counting barcodes, and binning reads.
 // Merge all lanes in read 1 and 2.
 process merge_lanes {
     input:
-    file fastq_r1 from fastq_r1_ch.collect()
-    file fastq_r2 from fastq_r2_ch.collect()
+    file fastq_r1 from fastq_r1_merge_ch.collect()
+    file fastq_r2 from fastq_r2_merge_ch.collect()
 
     output:
     file 'R1.fastq' into merged_fastq_r1_ch
@@ -181,6 +181,9 @@ process preproc {
 
 // Construct a readgroup from the filename of one of the input FASTQ files.
 process get_samplename {
+    input:
+    file fastq_r1 from fastq_r1_samplename_ch.collect()
+
     output:
     stdout sample_ch
 
@@ -194,6 +197,9 @@ process get_samplename {
 
 // Construct a readgroup from the sequence identifier in one of the input FASTQ files.
 process get_readgroup {
+    input:
+    file fastq_r1 from fastq_r1_readgroup_ch.collect()
+
     output:
     stdout readgroup_ch
 
@@ -328,6 +334,7 @@ process prepare_bqsr_table {
     gatk BaseRecalibrator \
             -I $bam \
             -R $reference \
+            -L $targets \
             --known-sites $dbsnp \
             -O 'bqsr.table' \
             --tmp-dir=tmp \
