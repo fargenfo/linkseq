@@ -75,26 +75,25 @@ the original data, it would screw up the merging process.
 
 */
 
+
 // Get lists of the read 1 and 2 FASTQ files.
-fastq_r1 = file(params.fastq_r1)
-fastq_r2 = file(params.fastq_r2)
+fastq_r1_list = file(params.fastq_r1)
+fastq_r2_list = file(params.fastq_r2)
 
 println '\nFASTQ path\t\t\t\t\tRead in pair\tSize (bytes)\tNumber of reads'
-fastq_r1.each { item ->
+fastq_r1_list.each { item ->
     println "${item.getName()}\t\tFirst\t\t${item.size()}\t\t${item.countFastq()}"
 }
-fastq_r2.each { item ->
+fastq_r2_list.each { item ->
     println "${item.getName()}\t\tSecond\t\t${item.size()}\t\t${item.countFastq()}"
 }
 
 println '==================================\n'
 
-
 // Check that there is at least one lane and that there is the same number of lanes for both reads.
-assert fastq_r1.size() > 0, 'The "fastq_r1" input parameter pattern did not match any files.'
-assert fastq_r2.size() > 0, 'The "fastq_r2" input parameter pattern did not match any files.'
-assert fastq_r1.size() == fastq_r2.size(), 'There is an unequal number of lanes in read 1 and read 2; the fastq_r1 and fastq_r2 patterns matched an unequal number of files.'
-
+assert fastq_r1_list.size() > 0, 'The "fastq_r1" input parameter pattern did not match any files.'
+assert fastq_r2_list.size() > 0, 'The "fastq_r2" input parameter pattern did not match any files.'
+assert fastq_r1_list.size() == fastq_r2_list.size(), 'There is an unequal number of lanes in read 1 and read 2; the fastq_r1 and fastq_r2 patterns matched an unequal number of files.'
 
 // Get FASTQ paths in channels.
 Channel.fromPath(params.fastq_r1).into { fastq_r1_merge_ch; fastq_r1_samplename_ch; fastq_r1_readgroup_ch }
@@ -106,10 +105,11 @@ but not limited to, merging lanes, counting barcodes, and binning reads.
 */
 
 // Merge all lanes in read 1 and 2.
+// If there is only one lane, all this process does is decompress the files.
 process merge_lanes {
     input:
-    file fastq_r1 from fastq_r1_merge_ch.collect()
-    file fastq_r2 from fastq_r2_merge_ch.collect()
+    file r1 from fastq_r1_merge_ch.collect()
+    file r2 from fastq_r2_merge_ch.collect()
 
     output:
     file 'R1.fastq' into merged_fastq_r1_ch
@@ -117,15 +117,15 @@ process merge_lanes {
 
     script:
     // Sort the FASTQ lists so that they are concatenated in the same order.
-    if (fastq_r1 instanceof List) {
-        fastq_r1 = fastq_r1.sort()
-        fastq_r1 = fastq_r1.join(' ')
-        fastq_r2 = fastq_r2.sort()
-        fastq_r2 = fastq_r2.join(' ')
+    if (fastq_r1_list.size() > 1) {
+        r1 = (r1 as List).sort()
+        r1 = r1.join(' ')
+        r2 = (r2 as List).sort()
+        r2 = r2.join(' ')
     }
     """
-    zcat $fastq_r1 > 'R1.fastq'
-    zcat $fastq_r2 > 'R2.fastq'
+    zcat $r1 > 'R1.fastq'
+    zcat $r2 > 'R2.fastq'
     """
 }
 
