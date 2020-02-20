@@ -66,10 +66,14 @@ hapmap = file(params.hapmap)
 targets = file(params.targets)
 
 // Get a list of GVCFs, and parse them to a format that GenomicsDBImport understands.
-gvcf_paths = file(params.gvcf_path + "/*.g.vcf")
-    .collect {"-V " + it}
-    .join(' ')
+//gvcf_paths = file(params.gvcf_path + "/*.g.vcf")
+//    .collect {"-V " + it}
+//    .join(' ')
 
+// Get the GVCF indexes.
+gvcf_idx_ch = Channel.fromPath(params.gvcf_path + "/*.g.vcf.idx")
+
+gvcf_ch = Channel.fromPath(params.gvcf_path + "/*.g.vcf")
 
 // TODO:
 // --reader-threads argument can possibly improve performance, but only works with one interval at a time:
@@ -83,15 +87,21 @@ gvcf_paths = file(params.gvcf_path + "/*.g.vcf")
 
 // Consolidate the GVCFs with a "genomicsdb" database, so that we are ready for joint genotyping.
 process consolidate_gvcf {
+    input:
+    file gvcfs from gvcf_ch.collect()
+    file idx from gvcf_idx_ch.collect()
+
     output:
     file "genomicsdb" into genomicsdb_ch
 
     script:
+    gvcfs = (gvcfs as List).join(' -V ')
+    gvcfs = '-V ' + gvcfs
     """
     mkdir tmp
     export TILEDB_DISABLE_FILE_LOCKING=1
     gatk GenomicsDBImport \
-        $gvcf_paths \
+        $gvcfs \
         -L $targets \
         --genomicsdb-workspace-path "genomicsdb" \
         --merge-input-intervals \
@@ -113,7 +123,7 @@ process joint_genotyping {
     mkdir tmp
     gatk GenotypeGVCFs \
         -V gendb://$genomicsdb \
-        -R $reference_fa \
+        -R $reference \
         -O "genotyped.vcf" \
         --tmp-dir=tmp \
         --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
@@ -143,7 +153,7 @@ process recalibrate_snps {
     """
     mkdir tmp
     gatk VariantRecalibrator \
-        -R $reference_fa \
+        -R $reference \
         -V $vcf \
         -resource:hapmap,known=false,training=true,truth=true,prior=15.0 $hapmap \
         -resource:omni,known=false,training=true,truth=false,prior=12.0 $omni \
@@ -175,7 +185,7 @@ process recalibrate_indels {
     """
     mkdir tmp
     gatk VariantRecalibrator \
-        -R $reference_fa \
+        -R $reference \
         -V $vcf \
         -resource:mills,known=false,training=true,truth=true,prior=12.0 $mills \
         -resource:dbsnp,known=true,training=false,truth=false,prior=2.0 $dbsnp \
@@ -205,7 +215,7 @@ process apply_vqsr_indels {
     """
     mkdir tmp
     gatk ApplyVQSR \
-        -R $reference_fa \
+        -R $reference \
         -V $vcf \
         -O "indels_recal.vcf" \
         --truth-sensitivity-filter-level 99.0 \
@@ -232,7 +242,7 @@ process apply_vqsr_snps {
     """
     mkdir tmp
     gatk ApplyVQSR \
-        -R $reference_fa \
+        -R $reference \
         -V $vcf \
         -O "recalibrated.vcf" \
         --truth-sensitivity-filter-level 99.0 \
@@ -279,7 +289,7 @@ process annotate_rsid {
     script:
     """
     gatk VariantAnnotator \
-        -R $reference_fa \
+        -R $reference \
         -V $vcf \
         --dbsnp $dbsnp \
         -O "rsid_ann.vcf"
@@ -341,7 +351,7 @@ process validate_vcf {
     """
     gatk ValidateVariants \
         -V $vcf \
-        -R $reference_fa \
+        -R $reference \
         --dbsnp $dbsnp
     """
 }
@@ -363,7 +373,7 @@ process variant_evaluation {
     echo -n > "variant_eval.table"
 
     gatk VariantEval \
-        -R $reference_fa \
+        -R $reference \
         --eval $vcf \
         --output "variant_eval.table" \
         --dbsnp $dbsnp \
