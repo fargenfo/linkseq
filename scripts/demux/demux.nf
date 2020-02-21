@@ -5,6 +5,13 @@ params.outdir = null
 params.samplesheet = null
 params.help = false
 
+/*
+
+**TODO:**
+* Change output directory structure: FASTQs in "fastq/sample" folder, FastQC results in sample subdirectory.
+
+*/
+
 helpMessage = """
     Input:
     rundir:         Path to FASTQ run directory.
@@ -110,10 +117,8 @@ process merge {
     sample = key[0]
     lane = key[1]
     read = key[2]
-    if(fastqs instanceof List) {
-        fastqs.sort()
-        fastqs = fastqs.join(' ')
-    }
+    fastqs.sort()
+    fastqs = fastqs.join(' ')
     """
     # Note: Piping the zcat output to gzip causes "unexpected end of file" errors sporadically.
     # Therefore, the zcat and gzip are done in separate steps.
