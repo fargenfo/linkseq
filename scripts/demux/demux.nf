@@ -5,13 +5,6 @@ params.outdir = null
 params.samplesheet = null
 params.help = false
 
-/*
-
-**TODO:**
-* Change output directory structure: FASTQs in "fastq/sample" folder, FastQC results in sample subdirectory.
-
-*/
-
 helpMessage = """
     Input:
     rundir:         Path to FASTQ run directory.
@@ -45,7 +38,7 @@ println "interop_dir         : ${interop_dir}"
 // and of the index.
 // Adapter sequences (read 1 and read2) should be contained in the sample sheet.
 process bcl2fastq {
-    publishDir "$outdir/fastq_out", mode: 'copy', pattern: '.command.log', saveAs: {filename -> 'bcl2fastq.log'}
+    publishDir "$outdir", mode: 'copy', pattern: '.command.log', saveAs: {filename -> 'bcl2fastq.log'}
 
     output:
     file "outs/*fastq.gz" into fastq_samplenames_ch
@@ -85,10 +78,12 @@ process bcl2fastq {
     """
 }
 
+// Prepare the channel for the merge process.
+
 // Get (key, FASTQ files) tuples, where key is a (sample names, lane, read) tuple.
 // First flatten the channel because each instance of process "bcl2fastq" outputs a tuple.
 // Then map the channel to (key, FASTQ path) tuples. This channel has one record per file.
-// Then group by sample name to get (key, FASTQ list) tuples.
+// Then group by key to get (key, FASTQ list) tuples.
 fastq_ch = fastq_samplenames_ch.flatten()
     .map { file ->
         def sample = file.name.toString().split('_')[0]
@@ -102,13 +97,11 @@ fastq_ch = fastq_samplenames_ch.flatten()
 // Since this process is only concatenating (cat) and zipping files, it doesn't need much memory or many cores.
 // We use the "when" directive to avoid processing the "Undetermined" sample.
 process merge {
-    publishDir "$outdir/fastq_out/$sample", mode: 'copy'
-
     input:
     set key, file(fastqs) from fastq_ch
 
     output:
-    set sample, file("$sample*fastq.gz") into fastq_check_sync_ch, fastq_sync_reads_ch, fastq_merged_ch
+    set sample, file("*merged.fastq.gz") into fastq_sync_ch
 
     when:
     key[0] != "Undetermined"
@@ -117,7 +110,7 @@ process merge {
     sample = key[0]
     lane = key[1]
     read = key[2]
-    # Sort the FASTQ names so that they are merged in the proper order.
+    // Sort the FASTQ names so that they are merged in the proper order.
     fastqs.sort()
     fastqs = fastqs.join(' ')
     """
@@ -128,62 +121,58 @@ process merge {
     """
 }
 
-// TODO: check that reads are synchronized. If they are not, synchronize them. If they must be synchronized, use publishDir again and overwrite.
+// Prepare channel for sync_reads.
 
-fastq_ch = fastq_check_sync_ch.map { it ->
+// Get (key, FASTQ files) tuples, where key is a (samplename, lane) tuple.
+// Then map the channel to (key, FASTQ path) tuples. This channel has one record per file.
+// Then group by key to get (key, FASTQ list) tuples.
+fastq_sync_ch = fastq_sync_ch.map { it ->
+        // The record is a (sample, FASTQ file) tuple.
         def sample = it[0]
         def file = it[1]
-        def lane = file.name.toString().split('_')[2]
+        // Process the file string to get the lane number.
+        def lane = file.name.toString().split('_')[1]
         def key = tuple(sample, lane)
         return tuple(key, file)}
     .groupTuple()
 
-process check_sync {
+// Sort the file names, so that the list is always in order (read1, read2).
+fastq_sync_ch = fastq_sync_ch.map { it ->
+    def key = it[0]
+    def fastqs = it[1]
+    return tuple(key, fastqs.sort())}
+
+// Synchronize reads, in case the reads got out of order in the merge process.
+process sync_reads {
+    publishDir "$outdir/$sample/fastqs", mode: 'copy'
+
     input:
-    set key, file(fastqs) from fastq_check_sync_ch
+    set key, file(fastqs) from fastq_sync_ch
 
     output:
-    file check_sync.log into check_sync_log_ch
+    set key, file("*synced.fastq.gz") into fastq_qc_ch
 
     script:
     sample = key[0]
     lane = key[1]
+    read1 = fastqs[0]
+    read2 = fastqs[1]
     """
-    # Check if reads are synchronized.
-    reformat.sh in="*R1*.fastq.gz" in2="*R2*.fastq.gz" out="check_sync.log" vpair
-    tail -n 1 
-    """
-}
-
-process sync_reads {
-    input:
-    set sample, file(fastqs) from fastq_sync_reads_ch
-
-    output:
-    set sample, file("$sample*fastq.gz") from fastq_synchronized_ch
-
-    when:
-    ????
-
-    """
-    # Synchronize reads.
+    # We use ziplevel=1 to get fast but low-level compression.
+    # NOTE: singletons.fastq.gz should be empty.
+    repair.sh ziplevel=1 in1=$read1 in2=$read2 out1=$sample\\_$lane\\_R1\\_synced.fastq.gz out2=$sample\\_$lane\\_R2\\_synced.fastq.gz outs=singletons.fastq.gz repair
     """
 }
-
-
-// The merged FASTQ files are grouped by sample, lane and read (but the tuple only contains sample
-// and file path). Group tuple by key so that we have all files in the sample in one channel element.
-fastq_qc_ch = fastq_qc_ch.groupTuple()
 
 // Run FastQC for QC metrics of raw data.
 process fastqc_analysis {
-    publishDir "$outdir/fastqc/$sample", mode: 'copy', pattern: '{*.zip,*.html}',
+    publishDir "$outdir/$sample/fastqc", mode: 'copy', pattern: '{*.zip,*.html}',
         saveAs: {filename -> filename.indexOf('.zip') > 0 ? "zips/$filename" : "$filename"}
-    publishDir "$outdir/fastqc/$sample", mode: 'copy', pattern: '.command.log',
+    publishDir "$outdir/$sample/fastqc", mode: 'copy', pattern: '.command.log',
         saveAs: {filename -> 'fastqc.log'}
 
     input:
-    set sample, file(fastqs) from fastq_qc_ch
+    set key, file(fastqs) from fastq_qc_ch
 
     output:
     set sample, file('*.{zip,html}') into fastqc_report_ch
@@ -191,6 +180,8 @@ process fastqc_analysis {
 
     script:
     fastq_list = (fastqs as List).join(' ')
+    sample = key[0]
+    lane = key[1] // Unused.
     """
     # We unset the DISPLAY variable to avoid having FastQC try to open the GUI.
     unset DISPLAY
