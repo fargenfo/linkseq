@@ -104,6 +104,8 @@ First, we align the data to reference with EMA. In order to do so, we need to do
 but not limited to, merging lanes, counting barcodes, and binning reads.
 */
 
+// TODO: make sure this sorting of FASTQ files works.
+
 // Merge all lanes in read 1 and 2.
 // If there is only one lane, all this process does is decompress the files.
 process merge_lanes {
@@ -128,6 +130,8 @@ process merge_lanes {
     zcat $r2 > 'R2.fastq'
     """
 }
+
+// TODO: check that reads are synchronized. If they are not, synchronize them.
 
 // Interleave reads 1 and 2.
 process interleave_fastq {

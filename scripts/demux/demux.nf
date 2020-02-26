@@ -108,7 +108,7 @@ process merge {
     set key, file(fastqs) from fastq_ch
 
     output:
-    set sample, file("$sample*fastq.gz") into fastq_qc_ch
+    set sample, file("$sample*fastq.gz") into fastq_check_sync_ch, fastq_sync_reads_ch, fastq_merged_ch
 
     when:
     key[0] != "Undetermined"
@@ -117,6 +117,7 @@ process merge {
     sample = key[0]
     lane = key[1]
     read = key[2]
+    # Sort the FASTQ names so that they are merged in the proper order.
     fastqs.sort()
     fastqs = fastqs.join(' ')
     """
@@ -126,6 +127,49 @@ process merge {
     gzip -k $sample\\_$lane\\_$read\\_merged.fastq
     """
 }
+
+// TODO: check that reads are synchronized. If they are not, synchronize them. If they must be synchronized, use publishDir again and overwrite.
+
+fastq_ch = fastq_check_sync_ch.map { it ->
+        def sample = it[0]
+        def file = it[1]
+        def lane = file.name.toString().split('_')[2]
+        def key = tuple(sample, lane)
+        return tuple(key, file)}
+    .groupTuple()
+
+process check_sync {
+    input:
+    set key, file(fastqs) from fastq_check_sync_ch
+
+    output:
+    file check_sync.log into check_sync_log_ch
+
+    script:
+    sample = key[0]
+    lane = key[1]
+    """
+    # Check if reads are synchronized.
+    reformat.sh in="*R1*.fastq.gz" in2="*R2*.fastq.gz" out="check_sync.log" vpair
+    tail -n 1 
+    """
+}
+
+process sync_reads {
+    input:
+    set sample, file(fastqs) from fastq_sync_reads_ch
+
+    output:
+    set sample, file("$sample*fastq.gz") from fastq_synchronized_ch
+
+    when:
+    ????
+
+    """
+    # Synchronize reads.
+    """
+}
+
 
 // The merged FASTQ files are grouped by sample, lane and read (but the tuple only contains sample
 // and file path). Group tuple by key so that we have all files in the sample in one channel element.
