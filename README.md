@@ -6,17 +6,18 @@ This pipeline basecalls/demultiplexes and aligns [linked-reads from 10x Genomics
 The pipeline is written in [Nextflow](https://www.nextflow.io/) and contains seven sub-pipelines:
 
 * `demux.nf`: basecall/demultiplex raw BCL data with [bcl2fastq](https://emea.support.illumina.com/content/dam/illumina-support/documents/documentation/software_documentation/bcl2fastq/bcl2fastq2-v2-20-software-guide-15051736-03.pdf)
-* `ema_align.nf`: align reads with [EMA](https://github.com/arshajii/ema/)
-* `lr_align.nf`: align reads with [longranger ALIGN](https://support.10xgenomics.com/genome-exome/software/pipelines/latest/advanced/other-pipelines)
-* `bwa_align.nf`: align reads with [BWA](http://bio-bwa.sourceforge.net/)
-* `single_sample.nf `: recalibrate BAM and call variants with GATK
+* `single_sample.nf `: align reads with [EMA](https://github.com/arshajii/ema/), recalibrate BAM and call variants with GATK
 * `multi_sample.nf`: joint genotyping and variant annotation and fitering.
+* Alignment only:
+	* `ema_align.nf`: align reads with [EMA](https://github.com/arshajii/ema/)
+	* `lr_align.nf`: align reads with [longranger ALIGN](https://support.10xgenomics.com/genome-exome/software/pipelines/latest/advanced/other-pipelines)
+	* `bwa_align.nf`: align reads with [BWA](http://bio-bwa.sourceforge.net/)
 * `phase.nf`: phase variants with [HapCUT2](https://github.com/vibansal/HapCUT2)
 
 ## Workflow
 
 * Basecall and demultiplex raw sequencing data with `demux.nf`
-* Process all your samples individualy with first `ema_align.nf` and `single_sample.nf`
+* Process all your samples individualy with `single_sample.nf`
 * Process your samples jointly with `multi_sample.nf`
 
 ## Basecalling/demultiplexing
@@ -51,7 +52,7 @@ Lane,Sample_ID,index
 
 Using that the index `SI-GA-C5` corresponds to the four octamers `CGACTTGA,TACAGACT,ATTGCGTG,GCGTACAC`. Notice that we also removed the `Sample_Project` column.
 
-Provided that you've set installed all the software in `environment.yml` (or maybe used this pipeline's Docker container at https://hub.docker.com/r/olavurmortensen/demuxlink), you should be able to run the pipeline like this:
+Provided that you've set installed all the software in `environment.yml` (or maybe used this pipeline's Docker container at https://hub.docker.com/r/olavurmortensen/exolink), you should be able to run the pipeline like this:
 
 ```
 nextflow exolink/scripts/demux/demux.nf --rundir tiny-bcl-2.2.0 --outdir results --samplesheet tiny-bcl-samplesheet-2.1.0.csv
@@ -71,4 +72,8 @@ The `reference/gatk_bundle.sh` script downloads all the resources needed from th
 > https://console.cloud.google.com/storage/browser/genomics-public-data/resources/broad/hg38/v0
 
 Our particular sequencing experiment uses the Agilent SureSelect Human All Exon V6 UTR kit to capture the exome. `reference/sureselect_human_all_exon_v6_utr_grch38` contains the target BED file we use and some details are in the README.
+
+## Align and call variants
+
+**TODO**
 
