@@ -1,6 +1,8 @@
 
 # exolink -- GATK best-practices pipeline adapted to linked-reads [WIP]
 
+**Note:** This pipeline is a work in progress.
+
 This pipeline basecalls/demultiplexes and aligns [linked-reads from 10x Genomics](https://www.10xgenomics.com/linked-reads/) and calls variants with GAKT. Specifically, germline short variant discovery (SNPs and indels) is performed according to [GATK best-practices](https://software.broadinstitute.org/gatk/best-practices/workflow?id=11145).
 
 The pipeline is written in [Nextflow](https://www.nextflow.io/) and contains seven sub-pipelines:
