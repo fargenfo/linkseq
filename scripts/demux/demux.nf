@@ -111,6 +111,7 @@ process merge {
     lane = key[1]
     read = key[2]
     // Sort the FASTQ names so that they are merged in the proper order.
+    fastqs = (fastqs as List)
     fastqs.sort()
     fastqs = fastqs.join(' ')
     """
@@ -160,7 +161,7 @@ process sync_reads {
     """
     # We use ziplevel=1 to get fast but low-level compression.
     # NOTE: singletons.fastq.gz should be empty.
-    repair.sh ziplevel=1 in1=$read1 in2=$read2 out1=$sample\\_$lane\\_R1\\_synced.fastq.gz out2=$sample\\_$lane\\_R2\\_synced.fastq.gz outs=singletons.fastq.gz repair
+    repair.sh -Xmx${task.memory.toGiga()}g ziplevel=1 in1=$read1 in2=$read2 out1=$sample\\_$lane\\_R1\\_synced.fastq.gz out2=$sample\\_$lane\\_R2\\_synced.fastq.gz outs=singletons.fastq.gz repair
     """
 }
 
