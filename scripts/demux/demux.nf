@@ -3,6 +3,7 @@
 params.rundir = null
 params.outdir = null
 params.samplesheet = null
+params.whitelist = null
 params.help = false
 
 helpMessage = """
@@ -20,10 +21,12 @@ if (params.help) {
 assert params.rundir != null, 'Input parameter "rundir" cannot be unassigned.'
 assert params.outdir != null, 'Input parameter "outdir" cannot be unassigned.'
 assert params.samplesheet != null, 'Input parameter "samplesheet" cannot be unassigned.'
+assert params.whitelist != null, 'Input parameter "whitelist" cannot be unassigned.'
 
 rundir = file(params.rundir)
 outdir = file(params.outdir)
 samplesheet = file(params.samplesheet)
+whitelist = file(params.whitelist)
 interop_dir = file(outdir + "InterOp")
 
 println "D E M U X    L I N K    "
@@ -165,30 +168,128 @@ process sync_reads {
     """
 }
 
-// Run FastQC for QC metrics of raw data.
-process fastqc_analysis {
-    publishDir "$outdir/$sample/fastqc", mode: 'copy', pattern: '{*.zip,*.html}',
-        saveAs: {filename -> filename.indexOf('.zip') > 0 ? "zips/$filename" : "$filename"}
-    publishDir "$outdir/$sample/fastqc", mode: 'copy', pattern: '.command.log',
-        saveAs: {filename -> 'fastqc.log'}
-
-    input:
-    set key, file(fastqs) from fastq_qc_ch
-
+// FIXME: copy script to bin
+// FIXME: change script, output to stdout
+// Parses samplesheet and saves adapter in a FASTA file.
+process extract_adapter {
     output:
-    set sample, file('*.{zip,html}') into fastqc_report_ch
-    set sample, file('.command.log') into fastqc_stdout_ch
+    //file file("adapter.fasta") into adapter_fasta_ch
 
     script:
-    fastq_list = (fastqs as List).join(' ')
-    sample = key[0]
-    lane = key[1] // Unused.
     """
-    # We unset the DISPLAY variable to avoid having FastQC try to open the GUI.
-    unset DISPLAY
-    mkdir tmp
-    fastqc -q --dir tmp --threads ${task.cpus} --outdir . $fastq_list
+    samplesheet_extract_adapter.py $samplesheet
     """
 }
+
+//adapter_fasta_ch.subscribe { println it }
+
+//// FIXME: sync_reads output read1 read2.
+//// FIXME: output log
+//// Trim adapters.
+//process trim_adapters {
+//    input:
+//    output:
+//    script:
+//    """
+//    # Trim adapters from 3' end (ktrim=r) with up to 2 mismatches (hdist=2).
+//    # k-mer size 21, and 11 at the end of the read (mink=11).
+//    # Use pair overlap detection (tbo), and trim both reads to the same length (tpe).
+//    bbduk.sh in1=$file in2=$r2 out1=$out1 out2=$out2 ref=[ADAPTER FASTA] ktrim=r k=21 mink=11 hdist=2 tbo tpe 2> bbduk.log
+//    """
+//}
+//
+//// FIXME:
+//// Check if reads are synchronized. If they are not, exit with an error.
+//
+//// FIXME: 
+//// Trim 10x barcode from read 2.
+//// The barcode is taken from the first 16 bases of read 1.
+//// If the barcode does not match any in the list of known barcodes (whitelist), we do not trim.
+//process bctrim {
+//    input:
+//    output:
+//    script:
+//    """
+//    trimR2bc.py $read1 $read2 $whitelist [OUTPUT R2] 1> bctrim_stats.log
+//    """
+//}
+//
+//// FIXME: remember to take read2 from bctrim, and read1 from... the previous process...
+//
+//// Trim poly-G tail.
+//process polyG_trim {
+//    input:
+//    output:
+//    script:
+//    """
+//    # Trim poly G of reads
+//    # Q: Disable quality filter, -L: Disable length filter, -A: Disable adapter filtering, -g: Enable polyG trim
+//    fastp -i $read1 -I $read2 -o $read1_out -O $read2_out -Q -L -A -g -h "polyG_trim_log.html" -j "polyG_trim_log.json" 2> polyG_trim.log
+//    # NOTE: is does not seem like HTML and JSON reports (-h and -j) can be disabled.
+//    """
+//}
+//
+//// FIXME: in polyG_trim, output to two channels (read 1 and read 2).
+//
+//// Do quality trimming and minimum length filtering (read 1).
+//process quality_trim_read1 {
+//    input:
+//    output:
+//    script:
+//    """
+//    # We don't trim from 5' end, because this would trim the barcode (-x).
+//    sickle se -f $file -t sanger -g -o $out -x -q 20 -l 58 1> sickle.log
+//    """
+//}
+//
+//// Do quality trimming and minimum length filtering (read 2).
+//process quality_trim_read2 {
+//    input:
+//    output:
+//    script:
+//    """
+//    sickle se -f $file -t sanger -g -o $out -q 20 -l 35 1> sickle.log
+//    """
+//}
+//
+//// FIXME: combing read 1 and 2 channels.
+//
+//process sync_reads_qtrim {
+//    input:
+//    output:
+//    script:
+//    """
+//    # We use ziplevel=1 to get fast but low-level compression.
+//    # NOTE: singletons.fastq.gz should be empty.
+//    # FIXME: output names????
+//    repair.sh -Xmx${task.memory.toGiga()}g ziplevel=1 in1=$read1 in2=$read2 out1=$sample\\_$lane\\_R1\\_synced.fastq.gz out2=$sample\\_$lane\\_R2\\_synced.fastq.gz outs=singletons.fastq.gz repair
+//    """
+//}
+//
+//// Run FastQC for QC metrics of raw data.
+//process fastqc_analysis {
+//    publishDir "$outdir/$sample/fastqc", mode: 'copy', pattern: '{*.zip,*.html}',
+//        saveAs: {filename -> filename.indexOf('.zip') > 0 ? "zips/$filename" : "$filename"}
+//    publishDir "$outdir/$sample/fastqc", mode: 'copy', pattern: '.command.log',
+//        saveAs: {filename -> 'fastqc.log'}
+//
+//    input:
+//    set key, file(fastqs) from fastq_qc_ch
+//
+//    output:
+//    set sample, file('*.{zip,html}') into fastqc_report_ch
+//    set sample, file('.command.log') into fastqc_stdout_ch
+//
+//    script:
+//    fastq_list = (fastqs as List).join(' ')
+//    sample = key[0]
+//    lane = key[1] // Unused.
+//    """
+//    # We unset the DISPLAY variable to avoid having FastQC try to open the GUI.
+//    unset DISPLAY
+//    mkdir tmp
+//    fastqc -q --dir tmp --threads ${task.cpus} --outdir . $fastq_list
+//    """
+//}
 
 
