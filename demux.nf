@@ -104,7 +104,7 @@ process merge {
     set key, file(fastqs) from fastq_ch
 
     output:
-    set sample, file("*merged.fastq.gz") into fastq_check_sync_ch
+    set sample, file("*merged.fastq.gz") into fastq_check_sync_ch, fastq_trim_adapters_ch 
 
     when:
     key[0] != "Undetermined"
@@ -127,25 +127,60 @@ process merge {
     """
 }
 
-process mess_up_sync_test {
-   input:
-   
 
 // Prepare input channel for check_sync.
-fastq_ch = fastq_check_sync_ch.map { it ->
+
+// Get (key, FASTQ files) tuples, where key is a (samplename, lane) tuple.
+// Then map the channel to (key, FASTQ path) tuples. This channel has one record per file.
+// Then group by key to get (key, FASTQ list) tuples.
+fastq_check_sync_ch = fastq_check_sync_ch.map { it ->
+        // The record is a (sample, FASTQ file) tuple.
         def sample = it[0]
         def file = it[1]
-        def lane = file.name.toString().split('_')[2]
+        // Process the file string to get the lane number.
+        def lane = file.name.toString().split('_')[1]
         def key = tuple(sample, lane)
         return tuple(key, file)}
     .groupTuple()
 
-process check_sync {
-    input:
-    set key, file(fastqs) from fastq_sync_ch
+// Sort the file names, so that the list is always in order (read1, read2).
+fastq_check_sync_ch = fastq_check_sync_ch.map { it ->
+    def key = it[0]
+    def fastqs = it[1]
+    return tuple(key, fastqs.sort())}
 
-    output:
-    file check_sync.log into check_sync_log_ch
+//// With this process I can unsynchronize the reads to check if the "check_sync" process works.
+//process mess_up_sync_test {
+//    input:
+//    set key, file(fastqs) from fastq_check_sync_ch
+//
+//    output:
+//    set key, file("*unsynced.fastq.gz"), file(read2) into fastq_check_sync_unsynced_ch
+//
+//    script:
+//    sample = key[0]
+//    lane = key[1]
+//    read1 = fastqs[0]
+//    read2 = fastqs[1]
+//    """
+//    # Mess up read 1.
+//    # Take the first read and place it at the end of the file.
+//    zcat $read1 > temp.fastq
+//    tail -n 4 temp.fastq > $sample\\_$lane\\_R1\\_unsynced.fastq
+//    head -n -4 temp.fastq >> $sample\\_$lane\\_R1\\_unsynced.fastq
+//    gzip -k $sample\\_$lane\\_R1\\_unsynced.fastq
+//    # Can use this if I want to remove lines:
+//    #zcat $read1 | head -n -3 > $sample\\_$lane\\_R1\\_unsynced.fastq
+//    """
+//}
+
+
+// Check that the read 1 and 2 are synchronized. If they are not, this process will throw an error
+// and the pipeline will exit.
+process check_sync {
+    echo true 
+    input:
+    set key, file(fastqs) from fastq_check_sync_ch
 
     script:
     sample = key[0]
@@ -154,33 +189,11 @@ process check_sync {
     read2 = fastqs[1]
     """
     # Check if reads are synchronized.
-    reformat.sh in="*R1*.fastq.gz" in2="*R2*.fastq.gz" out="check_sync.log" vpair
+    reformat.sh in=$read1 in2=$read2 vpair
     """
 }
 
-// NOTE: the code below synchronizes read 1 and 2 in FASTQ.
-//
-//// Prepare channel for sync_reads.
-//
-//// Get (key, FASTQ files) tuples, where key is a (samplename, lane) tuple.
-//// Then map the channel to (key, FASTQ path) tuples. This channel has one record per file.
-//// Then group by key to get (key, FASTQ list) tuples.
-//fastq_sync_ch = fastq_sync_ch.map { it ->
-//        // The record is a (sample, FASTQ file) tuple.
-//        def sample = it[0]
-//        def file = it[1]
-//        // Process the file string to get the lane number.
-//        def lane = file.name.toString().split('_')[1]
-//        def key = tuple(sample, lane)
-//        return tuple(key, file)}
-//    .groupTuple()
-//
-//// Sort the file names, so that the list is always in order (read1, read2).
-//fastq_sync_ch = fastq_sync_ch.map { it ->
-//    def key = it[0]
-//    def fastqs = it[1]
-//    return tuple(key, fastqs.sort())}
-//// Synchronize reads, in case the reads got out of order in the merge process.
+//// Synchronize reads, if the reads got out of order.
 //process sync_reads {
 //    publishDir "$outdir/$sample/fastqs", mode: 'copy'
 //
@@ -202,39 +215,39 @@ process check_sync {
 //    """
 //}
 
-// Parses samplesheet and saves adapter in a FASTA file.
-process extract_adapter {
-    output:
-    file "adapter.fasta" into adapter_fasta_ch
-
-    script:
-    """
-    samplesheet_extract_adapter.py $samplesheet > adapter.fasta
-    """
-}
-
-// Combine the FASTQs with the adapter FASTA file to get (key, read1 FASTQ, read2 FASTQ, adapter FASTA) tuples.
-trim_adapters_data_ch = fastq_trim_adapters_ch.combine(adapter_fasta_ch)
-
-// FIXME: output log
-// Trim adapters.
-process trim_adapters {
-    input:
-    set key, file(read1), file(read2), file(adapter_fasta) from trim_adapters_data_ch
-
-    output:
-    set key, file("*R1*adapter_trimmed.fastq.gz"), file("*R2*adapter_trimmed.fastq.gz") into fastq_bctrim_ch
-
-    script:
-    sample = key[0]
-    lane = key[1]
-    """
-    # Trim adapters from 3' end (ktrim=r) with up to 2 mismatches (hdist=2).
-    # k-mer size 21, and 11 at the end of the read (mink=11).
-    # Use pair overlap detection (tbo), and trim both reads to the same length (tpe).
-    bbduk.sh in1=$read1 in2=$read2 out1=$sample\\_$lane\\_R1\\_adapter_trimmed.fastq.gz out2=$sample\\_$lane\\_R2\\_adapter_trimmed.fastq.gz ref=$adapter_fasta ktrim=r k=21 mink=11 hdist=2 tbo tpe 2> bbduk.log
-    """
-}
+//// Parses samplesheet and saves adapter in a FASTA file.
+//process extract_adapter {
+//    output:
+//    file "adapter.fasta" into adapter_fasta_ch
+//
+//    script:
+//    """
+//    samplesheet_extract_adapter.py $samplesheet > adapter.fasta
+//    """
+//}
+//
+//// Combine the FASTQs with the adapter FASTA file to get (key, read1 FASTQ, read2 FASTQ, adapter FASTA) tuples.
+//trim_adapters_data_ch = fastq_trim_adapters_ch.combine(adapter_fasta_ch)
+//
+//// FIXME: output log
+//// Trim adapters.
+//process trim_adapters {
+//    input:
+//    set key, file(read1), file(read2), file(adapter_fasta) from trim_adapters_data_ch
+//
+//    output:
+//    set key, file("*R1*adapter_trimmed.fastq.gz"), file("*R2*adapter_trimmed.fastq.gz") into fastq_bctrim_ch
+//
+//    script:
+//    sample = key[0]
+//    lane = key[1]
+//    """
+//    # Trim adapters from 3' end (ktrim=r) with up to 2 mismatches (hdist=2).
+//    # k-mer size 21, and 11 at the end of the read (mink=11).
+//    # Use pair overlap detection (tbo), and trim both reads to the same length (tpe).
+//    bbduk.sh in1=$read1 in2=$read2 out1=$sample\\_$lane\\_R1\\_adapter_trimmed.fastq.gz out2=$sample\\_$lane\\_R2\\_adapter_trimmed.fastq.gz ref=$adapter_fasta ktrim=r k=21 mink=11 hdist=2 tbo tpe 2> bbduk.log
+//    """
+//}
 
 //// FIXME:
 //// Check if reads are synchronized. If they are not, exit with an error.
