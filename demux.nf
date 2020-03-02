@@ -177,7 +177,6 @@ fastq_temp_ch.into { fastq_check_sync_ch; fastq_trim_adapters_ch }
 //    """
 //}
 
-
 // Check that the read 1 and 2 are synchronized. If they are not, this process will throw an error
 // and the pipeline will exit.
 process check_sync {
@@ -192,7 +191,7 @@ process check_sync {
     read2 = fastqs[1]
     """
     # Check if reads are synchronized.
-    reformat.sh in=$read1 in2=$read2 vpair
+    reformat.sh -Xmx${task.memory.toGiga()}g in=$read1 in2=$read2 vpair
     """
 }
 
@@ -266,15 +265,16 @@ process bctrim {
     set key, file(read1), file(read2) from fastq_bctrim_ch
 
     output:
-    set key, file("*R1*bctrimmed.fastq.gz"), file("*R2*bctrimmed.fastq")
+    set key, file("*R1*bctrimmed.fastq.gz"), file("*R2*bctrimmed.fastq.gz") into fastq_polyg_trim_ch
 
     script:
     sample = key[0]
     lane = key[1]
     """
-    # FIXME: is the output FASTQ compressed?
     trimR2bc.py $read1 $read2 $whitelist $sample\\_$lane\\_R2\\_bctrimmed.fastq 1> bctrim_stats.log
-    # Even though we did not change R1, we rename it, as having differently named R1 and R2 can cause confusion.
+    # FIXME: write with gzip in the trimR2bc.py script, rather than compressing afterwards.
+    gzip -k $sample\\_$lane\\_R2\\_bctrimmed.fastq
+    # Even though we did not change R1, we rename it before outputting it, as having differently named R1 and R2 can cause confusion.
     cp $read1 $sample\\_$lane\\_R1\\_bctrimmed.fastq.gz
     """
 }
