@@ -254,22 +254,31 @@ process trim_adapters {
     """
 }
 
-//// FIXME:
-//// Check if reads are synchronized. If they are not, exit with an error.
-//
-//// FIXME: 
-//// Trim 10x barcode from read 2.
-//// The barcode is taken from the first 16 bases of read 1.
-//// If the barcode does not match any in the list of known barcodes (whitelist), we do not trim.
-//process bctrim {
-//    input:
-//    output:
-//    script:
-//    """
-//    trimR2bc.py $read1 $read2 $whitelist [OUTPUT R2] 1> bctrim_stats.log
-//    """
-//}
-//
+// FIXME:
+// Is it necessary to check if reads are synchronized?
+
+// FIXME: 
+// Trim 10x barcode from read 2.
+// The barcode is taken from the first 16 bases of read 1.
+// If the barcode does not match any in the list of known barcodes (whitelist), we do not trim.
+process bctrim {
+    input:
+    set key, file(read1), file(read2) from fastq_bctrim_ch
+
+    output:
+    set key, file("*R1*bctrimmed.fastq.gz"), file("*R2*bctrimmed.fastq")
+
+    script:
+    sample = key[0]
+    lane = key[1]
+    """
+    # FIXME: is the output FASTQ compressed?
+    trimR2bc.py $read1 $read2 $whitelist $sample\\_$lane\\_R2\\_bctrimmed.fastq 1> bctrim_stats.log
+    # Even though we did not change R1, we rename it, as having differently named R1 and R2 can cause confusion.
+    cp $read1 $sample\\_$lane\\_R1\\_bctrimmed.fastq.gz
+    """
+}
+
 //// FIXME: remember to take read2 from bctrim, and read1 from... the previous process...
 //
 //// Trim poly-G tail.
