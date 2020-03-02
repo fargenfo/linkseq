@@ -194,28 +194,6 @@ process check_merge_sync {
     """
 }
 
-//// Synchronize reads, if the reads got out of order.
-//process sync_reads {
-//    publishDir "$outdir/$sample/fastqs", mode: 'copy'
-//
-//    input:
-//    set key, file(fastqs) from fastq_sync_ch
-//
-//    output:
-//    set key, file("*R1*synced.fastq.gz"), file("*R2*synced.fastq.gz") into fastq_trim_adapters_ch
-//
-//    script:
-//    sample = key[0]
-//    lane = key[1]
-//    read1 = fastqs[0]
-//    read2 = fastqs[1]
-//    """
-//    # We use ziplevel=1 to get fast but low-level compression.
-//    # NOTE: singletons.fastq.gz should be empty.
-//    repair.sh -Xmx${task.memory.toGiga()}g ziplevel=1 in1=$read1 in2=$read2 out1=$sample\\_$lane\\_R1\\_synced.fastq.gz out2=$sample\\_$lane\\_R2\\_synced.fastq.gz outs=singletons.fastq.gz repair
-//    """
-//}
-
 // Parses samplesheet and saves adapter in a FASTA file.
 process extract_adapter {
     output:
@@ -316,9 +294,11 @@ process quality_trim_read1 {
     set key, file(read1), file(read2) from fastq_qtrim_r1_ch
 
     output:
-    set key, file("*R1*qtrimmed.fastq.gz") into fastq_qtrimed_r1_ch
+    set key, file("*R1*qtrimmed.fastq.gz") into fastq_qtrimmed_r1_ch
 
     script:
+    sample = key[0]
+    lane = key[1]
     """
     # We don't trim from 5' end, because this would trim the barcode (-x).
     sickle se -f $read1 -t sanger -g -o $sample\\_$lane\\_R1\\_qtrimmed.fastq.gz -x -q 20 -l 58 1> sickle.log
@@ -331,30 +311,52 @@ process quality_trim_read2 {
     set key, file(read1), file(read2) from fastq_qtrim_r2_ch
 
     output:
-    set key, file("*R2*qtrimmed.fastq.gz") into fastq_qtrimed_r2_ch
+    set key, file("*R2*qtrimmed.fastq.gz") into fastq_qtrimmed_r2_ch
 
     script:
+    sample = key[0]
+    lane = key[1]
     """
     sickle se -f $read2 -t sanger -g -o $sample\\_$lane\\_R2\\_qtrimmed.fastq.gz -q 20 -l 35 1> sickle.log
     """
 }
 
+// Join the (key, read1) with the (key, read2) channels to obtain a (key, read1, read2) channel.
 fastq_qtrimmed_ch = fastq_qtrimmed_r1_ch.join(fastq_qtrimmed_r2_ch)
 
-//// FIXME: combing read 1 and 2 channels.
-//
-//process sync_reads_qtrim {
+//// Check that the read 1 and 2 are synchronized. If they are not, this process will throw an error
+//// and the pipeline will exit.
+//process check_qtrim_sync {
 //    input:
-//    output:
+//    set key, file(read1), file(read2) from fastq_qtrimmed_ch
+//
 //    script:
 //    """
-//    # We use ziplevel=1 to get fast but low-level compression.
-//    # NOTE: singletons.fastq.gz should be empty.
-//    # FIXME: output names????
-//    repair.sh -Xmx${task.memory.toGiga()}g ziplevel=1 in1=$read1 in2=$read2 out1=$sample\\_$lane\\_R1\\_synced.fastq.gz out2=$sample\\_$lane\\_R2\\_synced.fastq.gz outs=singletons.fastq.gz repair
+//    # Check if reads are synchronized.
+//    reformat.sh -Xmx${task.memory.toGiga()}g in=$read1 in2=$read2 vpair
 //    """
 //}
-//
+
+// Synchronize reads, if the reads got out of order.
+process sync_qtrim_reads {
+    publishDir "$outdir/$sample/fastqs", mode: 'copy'
+
+    input:
+    set key, file(read1), file(read2) from fastq_qtrimmed_ch
+
+    output:
+    set key, file("*R1*synced.fastq.gz"), file("*R2*synced.fastq.gz") into fastq_qc_ch
+
+    script:
+    sample = key[0]
+    lane = key[1]
+    """
+    # We use ziplevel=1 to get fast but low-level compression.
+    # NOTE: singletons.fastq.gz should be empty.
+    repair.sh -Xmx${task.memory.toGiga()}g ziplevel=1 in1=$read1 in2=$read2 out1=$sample\\_$lane\\_R1\\_synced.fastq.gz out2=$sample\\_$lane\\_R2\\_synced.fastq.gz outs=singletons.fastq.gz repair
+    """
+}
+
 //// Run FastQC for QC metrics of raw data.
 //process fastqc_analysis {
 //    publishDir "$outdir/$sample/fastqc", mode: 'copy', pattern: '{*.zip,*.html}',
