@@ -345,7 +345,7 @@ process sync_qtrim_reads {
     set key, file(read1), file(read2) from fastq_qtrimmed_ch
 
     output:
-    set key, file("*R1*synced.fastq.gz"), file("*R2*synced.fastq.gz") into fastq_qc_ch
+    set key, file("*R1*.fastq.gz"), file("*R2*.fastq.gz") into fastq_qc_ch
 
     script:
     sample = key[0]
@@ -353,34 +353,34 @@ process sync_qtrim_reads {
     """
     # We use ziplevel=1 to get fast but low-level compression.
     # NOTE: singletons.fastq.gz should be empty.
-    repair.sh -Xmx${task.memory.toGiga()}g ziplevel=1 in1=$read1 in2=$read2 out1=$sample\\_$lane\\_R1\\_synced.fastq.gz out2=$sample\\_$lane\\_R2\\_synced.fastq.gz outs=singletons.fastq.gz repair
+    repair.sh -Xmx${task.memory.toGiga()}g ziplevel=1 in1=$read1 in2=$read2 out1=$sample\\_$lane\\_R1.fastq.gz out2=$sample\\_$lane\\_R2.fastq.gz outs=singletons.fastq.gz repair
     """
 }
 
-//// Run FastQC for QC metrics of raw data.
-//process fastqc_analysis {
-//    publishDir "$outdir/$sample/fastqc", mode: 'copy', pattern: '{*.zip,*.html}',
-//        saveAs: {filename -> filename.indexOf('.zip') > 0 ? "zips/$filename" : "$filename"}
-//    publishDir "$outdir/$sample/fastqc", mode: 'copy', pattern: '.command.log',
-//        saveAs: {filename -> 'fastqc.log'}
-//
-//    input:
-//    set key, file(fastqs) from fastq_qc_ch
-//
-//    output:
-//    set sample, file('*.{zip,html}') into fastqc_report_ch
-//    set sample, file('.command.log') into fastqc_stdout_ch
-//
-//    script:
-//    fastq_list = (fastqs as List).join(' ')
-//    sample = key[0]
-//    lane = key[1] // Unused.
-//    """
-//    # We unset the DISPLAY variable to avoid having FastQC try to open the GUI.
-//    unset DISPLAY
-//    mkdir tmp
-//    fastqc -q --dir tmp --threads ${task.cpus} --outdir . $fastq_list
-//    """
-//}
+// Run FastQC for QC metrics of raw data.
+process fastqc_analysis {
+    publishDir "$outdir/$sample/fastqc", mode: 'copy', pattern: '{*.zip,*.html}',
+        saveAs: {filename -> filename.indexOf('.zip') > 0 ? "zips/$filename" : "$filename"}
+    publishDir "$outdir/$sample/fastqc", mode: 'copy', pattern: '.command.log',
+        saveAs: {filename -> 'fastqc.log'}
+
+    input:
+    set key, file(read1), file(read2) from fastq_qc_ch
+
+    output:
+    set sample, file('*.{zip,html}') into fastqc_report_ch
+    set sample, file('.command.log') into fastqc_stdout_ch
+
+    script:
+    //fastq_list = (fastqs as List).join(' ')
+    sample = key[0]
+    lane = key[1] // Unused.
+    """
+    # We unset the DISPLAY variable to avoid having FastQC try to open the GUI.
+    unset DISPLAY
+    mkdir tmp
+    fastqc -q --dir tmp --threads ${task.cpus} --outdir . $read1 $read2
+    """
+}
 
 
