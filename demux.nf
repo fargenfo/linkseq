@@ -150,7 +150,7 @@ fastq_temp_ch = fastq_temp_ch.map { it ->
     return tuple(key, fastqs.sort())}
 
 // Copy the resulting channel into two channels to use in the two processes below.
-fastq_temp_ch.into { fastq_check_sync_ch; fastq_trim_adapters_ch }
+fastq_temp_ch.into { fastq_check_merge_sync_ch; fastq_trim_adapters_ch }
 
 //// With this process I can unsynchronize the reads to check if the "check_sync" process works.
 //process mess_up_sync_test {
@@ -179,10 +179,9 @@ fastq_temp_ch.into { fastq_check_sync_ch; fastq_trim_adapters_ch }
 
 // Check that the read 1 and 2 are synchronized. If they are not, this process will throw an error
 // and the pipeline will exit.
-process check_sync {
-    echo true 
+process check_merge_sync {
     input:
-    set key, file(fastqs) from fastq_check_sync_ch
+    set key, file(fastqs) from fastq_check_merge_sync_ch
 
     script:
     sample = key[0]
@@ -265,7 +264,7 @@ process bctrim {
     set key, file(read1), file(read2) from fastq_bctrim_ch
 
     output:
-    set key, file("*R1*bctrimmed.fastq.gz"), file("*R2*bctrimmed.fastq.gz") into fastq_polyg_trim_ch
+    set key, file("*R1*bctrimmed.fastq.gz"), file("*R2*bctrimmed.fastq.gz") into fastq_polyg_trim_ch, fastq_check_bctrim_sync_ch
 
     script:
     sample = key[0]
@@ -279,44 +278,69 @@ process bctrim {
     """
 }
 
-//// FIXME: remember to take read2 from bctrim, and read1 from... the previous process...
-//
-//// Trim poly-G tail.
-//process polyG_trim {
-//    input:
-//    output:
-//    script:
-//    """
-//    # Trim poly G of reads
-//    # Q: Disable quality filter, -L: Disable length filter, -A: Disable adapter filtering, -g: Enable polyG trim
-//    fastp -i $read1 -I $read2 -o $read1_out -O $read2_out -Q -L -A -g -h "polyG_trim_log.html" -j "polyG_trim_log.json" 2> polyG_trim.log
-//    # NOTE: is does not seem like HTML and JSON reports (-h and -j) can be disabled.
-//    """
-//}
-//
-//// FIXME: in polyG_trim, output to two channels (read 1 and read 2).
-//
-//// Do quality trimming and minimum length filtering (read 1).
-//process quality_trim_read1 {
-//    input:
-//    output:
-//    script:
-//    """
-//    # We don't trim from 5' end, because this would trim the barcode (-x).
-//    sickle se -f $file -t sanger -g -o $out -x -q 20 -l 58 1> sickle.log
-//    """
-//}
-//
-//// Do quality trimming and minimum length filtering (read 2).
-//process quality_trim_read2 {
-//    input:
-//    output:
-//    script:
-//    """
-//    sickle se -f $file -t sanger -g -o $out -q 20 -l 35 1> sickle.log
-//    """
-//}
-//
+// Check that the read 1 and 2 are synchronized. If they are not, this process will throw an error
+// and the pipeline will exit.
+process check_bctrim_sync {
+    input:
+    set key, file(read1), file(read2) from fastq_check_bctrim_sync_ch
+
+    script:
+    """
+    # Check if reads are synchronized.
+    reformat.sh -Xmx${task.memory.toGiga()}g in=$read1 in2=$read2 vpair
+    """
+}
+
+// Trim poly-G tail.
+process polyG_trim {
+    input:
+    set key, file(read1), file(read2) from fastq_polyg_trim_ch
+
+    output:
+    set key, file("*R1*polyGtrimmed.fastq.gz"), file("*R2*polyGtrimmed.fastq.gz") into fastq_qtrim_r1_ch, fastq_qtrim_r2_ch
+
+    script:
+    sample = key[0]
+    lane = key[1]
+    """
+    # Trim poly G of reads
+    # Q: Disable quality filter, -L: Disable length filter, -A: Disable adapter filtering, -g: Enable polyG trim
+    fastp -i $read1 -I $read2 -o $sample\\_$lane\\_R1\\_polyGtrimmed.fastq.gz -O $sample\\_$lane\\_R2\\_polyGtrimmed.fastq.gz -Q -L -A -g -h "polyG_trim_log.html" -j "polyG_trim_log.json" 2> polyG_trim.log
+    # NOTE: is does not seem like HTML and JSON reports (-h and -j) can be disabled.
+    """
+}
+
+// Do quality trimming and minimum length filtering (read 1).
+process quality_trim_read1 {
+    input:
+    set key, file(read1), file(read2) from fastq_qtrim_r1_ch
+
+    output:
+    set key, file("*R1*qtrimmed.fastq.gz") into fastq_qtrimed_r1_ch
+
+    script:
+    """
+    # We don't trim from 5' end, because this would trim the barcode (-x).
+    sickle se -f $read1 -t sanger -g -o $sample\\_$lane\\_R1\\_qtrimmed.fastq.gz -x -q 20 -l 58 1> sickle.log
+    """
+}
+
+// Do quality trimming and minimum length filtering (read 2).
+process quality_trim_read2 {
+    input:
+    set key, file(read1), file(read2) from fastq_qtrim_r2_ch
+
+    output:
+    set key, file("*R2*qtrimmed.fastq.gz") into fastq_qtrimed_r2_ch
+
+    script:
+    """
+    sickle se -f $read2 -t sanger -g -o $sample\\_$lane\\_R2\\_qtrimmed.fastq.gz -q 20 -l 35 1> sickle.log
+    """
+}
+
+fastq_qtrimmed_ch = fastq_qtrimmed_r1_ch.join(fastq_qtrimmed_r2_ch)
+
 //// FIXME: combing read 1 and 2 channels.
 //
 //process sync_reads_qtrim {
