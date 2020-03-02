@@ -104,7 +104,7 @@ process merge {
     set key, file(fastqs) from fastq_ch
 
     output:
-    set sample, file("*merged.fastq.gz") into fastq_check_sync_ch, fastq_trim_adapters_ch 
+    set sample, file("*merged.fastq.gz") into fastq_merged_ch
 
     when:
     key[0] != "Undetermined"
@@ -128,12 +128,12 @@ process merge {
 }
 
 
-// Prepare input channel for check_sync.
+// Prepare input channel for check_sync and and trim_adapters.
 
 // Get (key, FASTQ files) tuples, where key is a (samplename, lane) tuple.
 // Then map the channel to (key, FASTQ path) tuples. This channel has one record per file.
 // Then group by key to get (key, FASTQ list) tuples.
-fastq_check_sync_ch = fastq_check_sync_ch.map { it ->
+fastq_temp_ch = fastq_merged_ch.map { it ->
         // The record is a (sample, FASTQ file) tuple.
         def sample = it[0]
         def file = it[1]
@@ -144,10 +144,13 @@ fastq_check_sync_ch = fastq_check_sync_ch.map { it ->
     .groupTuple()
 
 // Sort the file names, so that the list is always in order (read1, read2).
-fastq_check_sync_ch = fastq_check_sync_ch.map { it ->
+fastq_temp_ch = fastq_temp_ch.map { it ->
     def key = it[0]
     def fastqs = it[1]
     return tuple(key, fastqs.sort())}
+
+// Copy the resulting channel into two channels to use in the two processes below.
+fastq_temp_ch.into { fastq_check_sync_ch; fastq_trim_adapters_ch }
 
 //// With this process I can unsynchronize the reads to check if the "check_sync" process works.
 //process mess_up_sync_test {
@@ -215,39 +218,41 @@ process check_sync {
 //    """
 //}
 
-//// Parses samplesheet and saves adapter in a FASTA file.
-//process extract_adapter {
-//    output:
-//    file "adapter.fasta" into adapter_fasta_ch
-//
-//    script:
-//    """
-//    samplesheet_extract_adapter.py $samplesheet > adapter.fasta
-//    """
-//}
-//
-//// Combine the FASTQs with the adapter FASTA file to get (key, read1 FASTQ, read2 FASTQ, adapter FASTA) tuples.
-//trim_adapters_data_ch = fastq_trim_adapters_ch.combine(adapter_fasta_ch)
-//
-//// FIXME: output log
-//// Trim adapters.
-//process trim_adapters {
-//    input:
-//    set key, file(read1), file(read2), file(adapter_fasta) from trim_adapters_data_ch
-//
-//    output:
-//    set key, file("*R1*adapter_trimmed.fastq.gz"), file("*R2*adapter_trimmed.fastq.gz") into fastq_bctrim_ch
-//
-//    script:
-//    sample = key[0]
-//    lane = key[1]
-//    """
-//    # Trim adapters from 3' end (ktrim=r) with up to 2 mismatches (hdist=2).
-//    # k-mer size 21, and 11 at the end of the read (mink=11).
-//    # Use pair overlap detection (tbo), and trim both reads to the same length (tpe).
-//    bbduk.sh in1=$read1 in2=$read2 out1=$sample\\_$lane\\_R1\\_adapter_trimmed.fastq.gz out2=$sample\\_$lane\\_R2\\_adapter_trimmed.fastq.gz ref=$adapter_fasta ktrim=r k=21 mink=11 hdist=2 tbo tpe 2> bbduk.log
-//    """
-//}
+// Parses samplesheet and saves adapter in a FASTA file.
+process extract_adapter {
+    output:
+    file "adapter.fasta" into adapter_fasta_ch
+
+    script:
+    """
+    samplesheet_extract_adapter.py $samplesheet > adapter.fasta
+    """
+}
+
+// Combine the FASTQs with the adapter FASTA file to get (key, read1 FASTQ, read2 FASTQ, adapter FASTA) tuples.
+trim_adapters_data_ch = fastq_trim_adapters_ch.combine(adapter_fasta_ch)
+
+// FIXME: output log
+// Trim adapters.
+process trim_adapters {
+    input:
+    set key, file(fastqs), file(adapter_fasta) from trim_adapters_data_ch
+
+    output:
+    set key, file("*R1*adapter_trimmed.fastq.gz"), file("*R2*adapter_trimmed.fastq.gz") into fastq_bctrim_ch
+
+    script:
+    sample = key[0]
+    lane = key[1]
+    read1 = fastqs[0]
+    read2 = fastqs[1]
+    """
+    # Trim adapters from 3' end (ktrim=r) with up to 2 mismatches (hdist=2).
+    # k-mer size 21, and 11 at the end of the read (mink=11).
+    # Use pair overlap detection (tbo), and trim both reads to the same length (tpe).
+    bbduk.sh in1=$read1 in2=$read2 out1=$sample\\_$lane\\_R1\\_adapter_trimmed.fastq.gz out2=$sample\\_$lane\\_R2\\_adapter_trimmed.fastq.gz ref=$adapter_fasta ktrim=r k=21 mink=11 hdist=2 tbo tpe 2> bbduk.log
+    """
+}
 
 //// FIXME:
 //// Check if reads are synchronized. If they are not, exit with an error.
