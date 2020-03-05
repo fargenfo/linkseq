@@ -143,14 +143,23 @@ fastq_temp_ch = fastq_merged_ch.map { it ->
         return tuple(key, file)}
     .groupTuple()
 
-// Sort the file names, so that the list is always in order (read1, read2).
+// Convert the channel records from (key, FASTQ list) tuples to (key, read 1, read 2) tuples.
 fastq_temp_ch = fastq_temp_ch.map { it ->
-    def key = it[0]
-    def fastqs = it[1]
-    return tuple(key, fastqs.sort())}
-
-// Copy the resulting channel into two channels to use in the two processes below.
-fastq_temp_ch.into { fastq_check_merge_sync_ch; fastq_trim_adapters_ch }
+    key = it[0]
+    fastq1 = it[1][0]
+    fastq2 = it[1][1]
+    // Get the "R1" or "R2" string from the first FASTQ.
+    fastq1_read = fastq1.baseName.toString().split('_')[2]
+    // Assign read 1 and 2 to fastq 1 and 2.
+    if(fastq1_read == "R1") {
+        read1 = fastq1
+        read2 = fastq2
+    } else {
+        read1 = fastq2
+        read2 = fastq1
+    }
+    return tuple(key, read1, read2)}.into {
+        fastq_check_merge_sync_ch; fastq_trim_adapters_ch}
 
 //// With this process I can unsynchronize the reads to check if the "check_sync" process works.
 //process mess_up_sync_test {
@@ -181,13 +190,11 @@ fastq_temp_ch.into { fastq_check_merge_sync_ch; fastq_trim_adapters_ch }
 // and the pipeline will exit.
 process check_merge_sync {
     input:
-    set key, file(fastqs) from fastq_check_merge_sync_ch
+    set key, file(read1), file(read2) from fastq_check_merge_sync_ch
 
     script:
     sample = key[0]
     lane = key[1]
-    read1 = fastqs[0]
-    read2 = fastqs[1]
     """
     # Check if reads are synchronized.
     reformat.sh -Xmx${task.memory.toGiga()}g in=$read1 in2=$read2 vpair
@@ -212,7 +219,7 @@ trim_adapters_data_ch = fastq_trim_adapters_ch.combine(adapter_fasta_ch)
 // Trim adapters.
 process trim_adapters {
     input:
-    set key, file(fastqs), file(adapter_fasta) from trim_adapters_data_ch
+    set key, file(read1), file(read2), file(adapter_fasta) from trim_adapters_data_ch
 
     output:
     set key, file("*R1*adapter_trimmed.fastq.gz"), file("*R2*adapter_trimmed.fastq.gz") into fastq_bctrim_ch
@@ -220,8 +227,6 @@ process trim_adapters {
     script:
     sample = key[0]
     lane = key[1]
-    read1 = fastqs[0]
-    read2 = fastqs[1]
     """
     # Trim adapters from 3' end (ktrim=r) with up to 2 mismatches (hdist=2).
     # k-mer size 21, and 11 at the end of the read (mink=11).
@@ -233,7 +238,6 @@ process trim_adapters {
 // FIXME:
 // Is it necessary to check if reads are synchronized?
 
-// FIXME: 
 // Trim 10x barcode from read 2.
 // The barcode is taken from the first 16 bases of read 1.
 // If the barcode does not match any in the list of known barcodes (whitelist), we do not trim.
