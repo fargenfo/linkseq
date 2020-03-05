@@ -1,0 +1,16 @@
+
+name: exolink-demux
+
+channels:
+  - bioconda
+  - conda-forge
+  - Freenome
+  - AgBiome
+
+dependencies:
+  - bcl2fastq=2.20
+  - fastqc=0.11.8
+  - nextflow=19.04.0
+  - bbtools=37.62
+  - fastp=0.20.0
+  - sickle-trim=1.33
