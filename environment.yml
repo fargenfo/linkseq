@@ -24,7 +24,7 @@ dependencies:
   - bioconda::perl-vcftools-vcf=0.1.16
   - AgBiome::bbtools=37.62
   - bioconda::fastp=0.20.0
-  - bioconda::sickle-trim::1.33
+  - bioconda::sickle-trim=1.33
   - conda-forge::r-gsalib=2.1
   - conda-forge::r-gplots=3.0.1.1
   - conda-forge::r-ggplot2=3.1.1
