@@ -87,14 +87,15 @@ process bcl2fastq {
 // First flatten the channel because each instance of process "bcl2fastq" outputs a tuple.
 // Then map the channel to (key, FASTQ path) tuples. This channel has one record per file.
 // Then group by key to get (key, FASTQ list) tuples.
-fastq_ch = fastq_samplenames_ch.flatten()
+fastq_samplenames_ch.flatten()
     .map { file ->
         def sample = file.name.toString().split('_')[0]
         def lane = file.name.toString().split('_')[2]
         def read = file.name.toString().split('_')[3]
         def key = tuple(sample, lane, read)
         return tuple(key, file)}
-    .groupTuple()
+    .groupTuple().set { fastq_ch }
+
 
 // Since 10x samples have multiple indexes per sample, we merge these.
 // Since this process is only concatenating (cat) and zipping files, it doesn't need much memory or many cores.
@@ -124,6 +125,7 @@ process merge {
     # Therefore, the zcat and gzip are done in separate steps.
     zcat $fastqs > $sample\\_$lane\\_$read\\_merged.fastq
     gzip -k $sample\\_$lane\\_$read\\_merged.fastq
+
     """
 }
 
@@ -218,11 +220,14 @@ trim_adapters_data_ch = fastq_trim_adapters_ch.combine(adapter_fasta_ch)
 // FIXME: output log
 // Trim adapters.
 process trim_adapters {
+    publishDir "$outdir/$sample/logs/adapter_trim", mode: 'copy', pattern: 'bbduk.log', saveAs: { filename -> "${lane}.log" }
+
     input:
     set key, file(read1), file(read2), file(adapter_fasta) from trim_adapters_data_ch
 
     output:
     set key, file("*R1*adapter_trimmed.fastq.gz"), file("*R2*adapter_trimmed.fastq.gz") into fastq_bctrim_ch
+    file 'bbduk.log'
 
     script:
     sample = key[0]
@@ -242,11 +247,14 @@ process trim_adapters {
 // The barcode is taken from the first 16 bases of read 1.
 // If the barcode does not match any in the list of known barcodes (whitelist), we do not trim.
 process bctrim {
+    publishDir "$outdir/$sample/logs/bctrim", mode: 'copy', pattern: 'bctrim_stats.log', saveAs: { filename -> "${lane}.log" }
+
     input:
     set key, file(read1), file(read2) from fastq_bctrim_ch
 
     output:
     set key, file("*R1*bctrimmed.fastq.gz"), file("*R2*bctrimmed.fastq.gz") into fastq_polyg_trim_ch, fastq_check_bctrim_sync_ch
+    file 'bctrim_stats.log'
 
     script:
     sample = key[0]
@@ -275,11 +283,14 @@ process check_bctrim_sync {
 
 // Trim poly-G tail.
 process polyG_trim {
+    publishDir "$outdir/$sample/logs/polyG_trim", mode: 'copy', pattern: 'polyG_trim.log', saveAs: { filename -> "${lane}.log" }
+
     input:
     set key, file(read1), file(read2) from fastq_polyg_trim_ch
 
     output:
     set key, file("*R1*polyGtrimmed.fastq.gz"), file("*R2*polyGtrimmed.fastq.gz") into fastq_qtrim_r1_ch, fastq_qtrim_r2_ch
+    file 'polyG_trim.log'
 
     script:
     sample = key[0]
@@ -294,11 +305,14 @@ process polyG_trim {
 
 // Do quality trimming and minimum length filtering (read 1).
 process quality_trim_read1 {
+    publishDir "$outdir/$sample/logs/quality_trim", mode: 'copy', pattern: 'sickle.log', saveAs: { filename -> "${lane}_R1.log" }
+
     input:
     set key, file(read1), file(read2) from fastq_qtrim_r1_ch
 
     output:
     set key, file("*R1*qtrimmed.fastq.gz") into fastq_qtrimmed_r1_ch
+    file 'sickle.log'
 
     script:
     sample = key[0]
@@ -311,11 +325,14 @@ process quality_trim_read1 {
 
 // Do quality trimming and minimum length filtering (read 2).
 process quality_trim_read2 {
+    publishDir "$outdir/$sample/logs/quality_trim", mode: 'copy', pattern: 'sickle.log', saveAs: { filename -> "${lane}_R2.log" }
+
     input:
     set key, file(read1), file(read2) from fastq_qtrim_r2_ch
 
     output:
     set key, file("*R2*qtrimmed.fastq.gz") into fastq_qtrimmed_r2_ch
+    file 'sickle.log'
 
     script:
     sample = key[0]
@@ -343,13 +360,15 @@ fastq_qtrimmed_ch = fastq_qtrimmed_r1_ch.join(fastq_qtrimmed_r2_ch)
 
 // Synchronize reads, if the reads got out of order.
 process sync_qtrim_reads {
-    publishDir "$outdir/$sample/fastqs", mode: 'copy'
+    publishDir "$outdir/$sample/fastqs", mode: 'copy', pattern: "*.fastq.gz"
+    publishDir "$outdir/$sample/logs/sync_reads", mode: 'copy', pattern: '.command.log', saveAs: { filename -> "${lane}.log" }
 
     input:
     set key, file(read1), file(read2) from fastq_qtrimmed_ch
 
     output:
     set key, file("*R1*.fastq.gz"), file("*R2*.fastq.gz") into fastq_qc_ch
+    file '.command.log'
 
     script:
     sample = key[0]
