@@ -124,8 +124,7 @@ process merge {
     # Note: Piping the zcat output to gzip causes "unexpected end of file" errors sporadically.
     # Therefore, the zcat and gzip are done in separate steps.
     zcat $fastqs > $sample\\_$lane\\_$read\\_merged.fastq
-    gzip -k $sample\\_$lane\\_$read\\_merged.fastq
-
+    gzip $sample\\_$lane\\_$read\\_merged.fastq
     """
 }
 
