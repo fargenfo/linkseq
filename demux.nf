@@ -234,7 +234,7 @@ process trim_adapters {
     # Trim adapters from 3' end (ktrim=r) with up to 2 mismatches (hdist=2).
     # k-mer size 21, and 11 at the end of the read (mink=11).
     # Use pair overlap detection (tbo), and trim both reads to the same length (tpe).
-    bbduk.sh in1=$read1 in2=$read2 out1=$sample\\_$lane\\_R1\\_adapter_trimmed.fastq.gz out2=$sample\\_$lane\\_R2\\_adapter_trimmed.fastq.gz ref=$adapter_fasta ktrim=r k=21 mink=11 hdist=2 tbo tpe 2> bbduk.log
+    bbduk.sh -Xmx${task.memory.toGiga()}g in1=$read1 in2=$read2 out1=$sample\\_$lane\\_R1\\_adapter_trimmed.fastq.gz out2=$sample\\_$lane\\_R2\\_adapter_trimmed.fastq.gz ref=$adapter_fasta ktrim=r k=21 mink=11 hdist=2 tbo tpe 2> bbduk.log
     """
 }
 
