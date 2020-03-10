@@ -115,10 +115,9 @@ process merge {
     lane = key[1]
     read = key[2]
     // If there are multiple FASTQs in the input, sort the names so that they are merged in the proper order.
-    if(fastqs instanceof List) {
+    if(fastqs instanceof Tuple) {
         fastqs = (fastqs as List)
-        fastqs.sort()
-        fastqs = fastqs.join(' ')
+        fastqs = fastqs.sort().join(' ')
     }
     """
     # Note: Piping the zcat output to gzip causes "unexpected end of file" errors sporadically.
