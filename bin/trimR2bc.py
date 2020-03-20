@@ -2,19 +2,27 @@
 
 """
 Author: Elisabet Thomsen
-Date: 07-02-2020
+Date: 18-03-2020
 Description: Program that trims barcodes off R2.
-It checks if the 16 first bases in R1 are barcodes in the whitelist (allows one mismatch).
+It checks if the 16 first bases in R1 are barcodes in the whitelist.
 If positive, it reverse compliments the barcode, and checks if the rev_barcode is in the corresponding R2. If negative, it searches for rev_bc with one mismatch.
 It searches from the 5' end and cuts the first match it finds.
+If cuts line 4 to same length as line 2.
+If R1 or R2 are shorter than 16 bp it will not trim.
+Checks if line 2 contains nothing (''). If true, replaces '' with 'N' and replaces line 4 with '!'.
 Throughput: Approx. 6381 read-pairs/second
-Output: A barcode trimmed R2 fastq file.
-Input: R1 and R2 must be in two seperate gziped fastq files.
+Output: A barcode trimmed R2 fastq file (not gzipped).
+Input: R1 and R2 must be in two seperate fastq files. If they are gzipped, they must end with '.gz'.
 Usage: ./trimR2bc.py <R1fastqfile> <R2fastqfile> <whitelist> <R2outfile> 1>>bctrim_stats.txt
 """
 
 
 import sys, gzip
+
+# Check commandline
+if len(sys.argv) < 5:
+    print('Usage: ./trimR2bc.py <R1fastqfile> <R2fastqfile> <whitelist> <R2outfile>');
+    sys.exit(1)
 
 # Get filename from commandline
 readfile = sys.argv[1]
@@ -23,10 +31,23 @@ whitelistfile = sys.argv[3]
 outfilename = sys.argv[4]
 
 # Open files
-infile = gzip.open(readfile,"rt")
-infile2 = gzip.open(readfile2, "rt")
-barcodefile = open(whitelistfile,"r")
-outfile = open(outfilename,'wt')
+try:
+    # Check if file1 is gziped or not
+    if readfile.lower().endswith('.gz'):
+        infile = gzip.open(readfile,"rt")
+    else:
+        infile = open(readfile,"rt")
+    # Check if file2 is gziped or not
+    if readfile2.lower().endswith('.gz'):
+        infile2 = gzip.open(readfile2, "rt")
+    else:
+        infile2 = open(readfile2, "rt")
+
+    barcodefile = open(whitelistfile,"r")
+    outfile = open(outfilename,'wt')
+except IOError as err:
+    print("Cant open file:", str(err));
+    sys.exit(1)
 
 
 # Define function
@@ -98,8 +119,8 @@ chunkreadcount = 0
 trimfbccount = 0
 trimhbccount = 0
 totalbptrim = 0
-totalbp= 0
-
+totalbp = 0
+Nflag = False
 
 # Iterate through lines in both files
 for line1, line2 in zip(infile, infile2):
@@ -113,7 +134,8 @@ for line1, line2 in zip(infile, infile2):
         R2sq = line2[:-1]
         R2len_pretrim = len(R2sq)
 
-        if bc in barcodelist:
+        # Only continue, if R1 and R2 are 16 bp or more and bc is in barcodelist
+        if bc in barcodelist and len(bc) >= 16 and len(R2sq) >= 16:
             # Reverse complement the barcode
             rev_bc = bc.translate(complementtable)[::-1]
 
@@ -165,7 +187,7 @@ for line1, line2 in zip(infile, infile2):
                         break
                     pos2 = R2sq.find(bait2, pos2+1, pos1_fin)
 
-                # Find the first 1 mismatch from 5' end 
+                # Find the first 1 mismatch from 5' end
                 if hflag:
                     if pos1_fin > pos2_fin:
                         pos_fin = pos2_fin
@@ -180,11 +202,22 @@ for line1, line2 in zip(infile, infile2):
         totalbptrim += bptrimlen
         totalbp += R2len_pretrim
 
+        # If R2sq = '', then replace with 'N'
+        if len(R2sq) == 0:
+            R2sq = 'N'
+            Nflag = True
+
         printthis += R2sq + '\n'
 
     # Set the count to 0 again (fq files have 4 lines per read)
     elif count == 4:
         count = 0
+
+        # If R2sq was '', then replace with '!'
+        if Nflag == True:
+            line2 = '!'
+            Nflag = False
+
         # Trim the quality line to same length as R2
         printthis += line2[:len(R2sq)] + '\n'
         chunkreadcount += 1
