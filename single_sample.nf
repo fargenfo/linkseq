@@ -80,13 +80,14 @@ the original data, it would screw up the merging process.
 fastq_r1_list = file(params.fastq_r1)
 fastq_r2_list = file(params.fastq_r2)
 
-println '\nFASTQ path\t\t\t\t\tRead in pair\tSize (bytes)\tNumber of reads'
-fastq_r1_list.each { item ->
-    println "${item.getName()}\t\tFirst\t\t${item.size()}\t\t${item.countFastq()}"
-}
-fastq_r2_list.each { item ->
-    println "${item.getName()}\t\tSecond\t\t${item.size()}\t\t${item.countFastq()}"
-}
+// NOTE: the code below is kind of neat, but takes to much time to justify its neatness.
+//println '\nFASTQ path\t\t\t\t\tRead in pair\tSize (bytes)\tNumber of reads'
+//fastq_r1_list.each { item ->
+//    println "${item.getName()}\t\tFirst\t\t${item.size()}\t\t${item.countFastq()}"
+//}
+//fastq_r2_list.each { item ->
+//    println "${item.getName()}\t\tSecond\t\t${item.size()}\t\t${item.countFastq()}"
+//}
 
 println '==================================\n'
 
@@ -110,8 +111,8 @@ but not limited to, merging lanes, counting barcodes, and binning reads.
 // If there is only one lane, all this process does is decompress the files.
 process merge_lanes {
     input:
-    file r1 from fastq_r1_merge_ch.collect()
-    file r2 from fastq_r2_merge_ch.collect()
+    file r1 from fastq_r1_merge_ch.toSortedList()
+    file r2 from fastq_r2_merge_ch.toSortedList()
 
     output:
     file 'R1.fastq' into merged_fastq_r1_ch
@@ -119,10 +120,8 @@ process merge_lanes {
 
     script:
     // Sort the FASTQ lists so that they are concatenated in the same order.
-    if (fastq_r1_list.size() > 1) {
-        r1 = (r1 as List).sort()
+    if(r1 instanceof List) {
         r1 = r1.join(' ')
-        r2 = (r2 as List).sort()
         r2 = r2.join(' ')
     }
     """
