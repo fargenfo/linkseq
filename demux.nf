@@ -349,19 +349,6 @@ process quality_trim_read2 {
 // Join the (key, read1) with the (key, read2) channels to obtain a (key, read1, read2) channel.
 fastq_qtrimmed_ch = fastq_qtrimmed_r1_ch.join(fastq_qtrimmed_r2_ch)
 
-//// Check that the read 1 and 2 are synchronized. If they are not, this process will throw an error
-//// and the pipeline will exit.
-//process check_qtrim_sync {
-//    input:
-//    set key, file(read1), file(read2) from fastq_qtrimmed_ch
-//
-//    script:
-//    """
-//    # Check if reads are synchronized.
-//    reformat.sh -Xmx${task.memory.toGiga()}g in=$read1 in2=$read2 vpair
-//    """
-//}
-
 // Synchronize reads, if the reads got out of order.
 process sync_qtrim_reads {
     publishDir "$outdir/$sample/fastqs", mode: 'copy', pattern: "*.fastq.gz"
