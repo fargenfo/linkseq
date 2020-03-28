@@ -4,20 +4,20 @@
 **Note:** This pipeline is a work in progress.
 
 ## Table of Contents  
-* [Overview](https://github.com/olavurmortensen/linkseq#overview)
-* [Workflow](https://github.com/olavurmortensen/linkseq#workflow)
-* [Basecalling/demultiplexing and trimming with `demux`](https://github.com/olavurmortensen/linkseq#basecallingdemultiplexing-and-trimming-with-demux)
-	* [Trimming](https://github.com/olavurmortensen/linkseq#trimming)
-	* [Setup](https://github.com/olavurmortensen/linkseq#setup)
-	* [Running on tiny-bcl](https://github.com/olavurmortensen/linkseq#running-on-tiny-bcl)
-		* [Running demux pipeline](https://github.com/olavurmortensen/linkseq#run-demux-pipeline)
-		* [Output](https://github.com/olavurmortensen/linkseq#output)
+* [Overview](#overview)
+* [Workflow](#workflow)
+* [Basecalling/demultiplexing and trimming with `demux`](#basecallingdemultiplexing-and-trimming-with-demux)
+	* [Trimming](#trimming)
+	* [Setup](#setup)
+	* [Running on tiny-bcl](#running-on-tiny-bcl)
+		* [Running demux pipeline](#run-demux-pipeline)
+		* [Output](#output)
 * [Align reads and call variants with `single_sample.nf` and `multi_sample.nf`](#align-reads-and-call-variants-with-single_samplenf-and-multi_samplenf)
-* [Phase variants with `phase.nf`](https://github.com/olavurmortensen/linkseq#phase-variants-with-phasenf)
-* [Reference resources](https://github.com/olavurmortensen/linkseq#reference-resources)
-	* [Barcode whitelist](https://github.com/olavurmortensen/linkseq#barcode-whitelist)
-	* [GATK resources](https://github.com/olavurmortensen/linkseq#gatk-resources)
-	* [Exome sequencing targets](https://github.com/olavurmortensen/linkseq#exome-sequencing-targets)
+* [Phase variants with `phase.nf`](#phase-variants-with-phasenf)
+* [Reference resources](#reference-resources)
+	* [Barcode whitelist](#barcode-whitelist)
+	* [GATK resources](#gatk-resources)
+	* [Exome sequencing targets](#exome-sequencing-targets)
 
 ## Overview
 
