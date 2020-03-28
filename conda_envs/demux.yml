@@ -1,5 +1,5 @@
 
-name: exolink-demux
+name: linkseq-demux
 
 channels:
   - bioconda
