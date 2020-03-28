@@ -92,14 +92,14 @@ Lane,Sample_ID,index,Sample_Project
 To the following:
 
 ```
-Lane,Sample_ID,index
-5,Sample1_1,CGACTTGA
-5,Sample1_2,TACAGACT
-5,Sample1_3,ATTGCGTG
-5,Sample1_4,GCGTACAC
+Lane,Sample_ID,Sample_Name,index
+5,Sample1_1,Sample1,CGACTTGA
+5,Sample1_2,Sample1,TACAGACT
+5,Sample1_3,Sample1,ATTGCGTG
+5,Sample1_4,Sample1,GCGTACAC
 ```
 
-Using that the index `SI-GA-C5` corresponds to the four octamers `CGACTTGA,TACAGACT,ATTGCGTG,GCGTACAC` (10X Genomics have a tool for this on [their website](https://support.10xgenomics.com/genome-exome/software/pipelines/latest/using/bcl2fastq-direct)). Notice that we also removed the `Sample_Project` column, and added an extra integer ID to each sample/index pair.
+Using that the index `SI-GA-C5` corresponds to the four octamers `CGACTTGA,TACAGACT,ATTGCGTG,GCGTACAC` (10X Genomics have a tool for this on [their website](https://support.10xgenomics.com/genome-exome/software/pipelines/latest/using/bcl2fastq-direct)).
 
 Also add adapter sequences to the `[Settings]` part of the samplesheet:
 ```
