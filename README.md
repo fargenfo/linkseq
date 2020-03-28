@@ -86,7 +86,7 @@ AdapterRead2,AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT
 
 #### Run demux pipeline
 
-Use the `example_config/demux.config` to get an idea how to define input parameters. For the `tiny-bcl` dataset, you should set `rundir` to `tiny-bcl-2.0.0` and `samplesheet` to `tiny-bcl-samplesheet-2.1.0.csv`. Additionally, you need the barcode whitelist, see the [barcode whitelist](https://github.com/olavurmortensen/linkseq#barcode-whitelist) section on how to obtain this list.
+Use the `example_configs/demux.config` to get an idea how to define input parameters. For the `tiny-bcl` dataset, you should set `rundir` to `tiny-bcl-2.0.0` and `samplesheet` to `tiny-bcl-samplesheet-2.1.0.csv`. Additionally, you need the barcode whitelist, see the [barcode whitelist](https://github.com/olavurmortensen/linkseq#barcode-whitelist) section on how to obtain this list.
 
 When you've made the config file and activated the `linkseq-demux` environment, run the pipeline like this:
 
