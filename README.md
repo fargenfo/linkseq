@@ -78,6 +78,12 @@ Lane,Sample_ID,index
 
 Using that the index `SI-GA-C5` corresponds to the four octamers `CGACTTGA,TACAGACT,ATTGCGTG,GCGTACAC` (10X Genomics have a tool for this on [their website](https://support.10xgenomics.com/genome-exome/software/pipelines/latest/using/bcl2fastq-direct)). Notice that we also removed the `Sample_Project` column.
 
+Also add adapter sequences to the `[Settings]` part of the samplesheet:
+```
+Adapter,AGATCGGAAGAGCACACGTCTGAACTCCAGTCA
+AdapterRead2,AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT
+```
+
 #### Run demux pipeline
 
 Use the `example_config/demux.config` to get an idea how to define input parameters. For the `tiny-bcl` dataset, you should set `rundir` to `tiny-bcl-2.0.0` and `samplesheet` to `tiny-bcl-samplesheet-2.1.0.csv`. Additionally, you need the barcode whitelist, see the [barcode whitelist](https://github.com/olavurmortensen/linkseq#barcode-whitelist) section on how to obtain this list.
