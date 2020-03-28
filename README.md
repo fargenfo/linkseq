@@ -134,6 +134,15 @@ outs/
             └── L005.log
 ```
 
+
+## Align reads and call variants with `single_sample.nf` and `multi_sample.nf`
+
+**TODO**
+
+## Phase variants with `phase.nf`
+
+**TODO**
+
 ## Reference resources
 
 ### Barcode whitelist
@@ -164,7 +173,4 @@ The `reference/gatk_bundle.sh` script downloads all the resources needed from th
 
 Our particular sequencing experiment uses the Agilent SureSelect Human All Exon V6 UTR kit to capture the exome. `reference/sureselect_human_all_exon_v6_utr_grch38` contains the target BED file we use and some details are in the README.
 
-## Align and call variants
-
-**TODO**
 
