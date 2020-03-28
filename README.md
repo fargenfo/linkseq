@@ -1,5 +1,5 @@
 
-# exolink -- GATK best-practices pipeline adapted to linked-reads [WIP]
+# linkseq -- GATK best-practices pipeline adapted to linked-reads [WIP]
 
 **Note:** This pipeline is a work in progress.
 
