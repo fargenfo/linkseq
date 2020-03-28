@@ -4,9 +4,22 @@
 **Note:** This pipeline is a work in progress.
 
 ## Table of Contents  
+* [Overview](https://github.com/olavurmortensen/linkseq#overview)
 * [Workflow](https://github.com/olavurmortensen/linkseq#workflow)
 * [Basecalling/demultiplexing and trimming with `demux`](https://github.com/olavurmortensen/linkseq#basecallingdemultiplexing-and-trimming-with-demux)
 	* [Trimming](https://github.com/olavurmortensen/linkseq#trimming)
+	* [Setup](https://github.com/olavurmortensen/linkseq#setup)
+	* [Running on tiny-bcl](https://github.com/olavurmortensen/linkseq#running-on-tiny-bcl)
+		* [Running demux pipeline](https://github.com/olavurmortensen/linkseq#run-demux-pipeline)
+		* [Output](https://github.com/olavurmortensen/linkseq#output)
+* [Align reads and call variants with `single_sample.nf` and `multi_sample.nf`](https://github.com/olavurmortensen/linkseq#align-reads-and-call-variants-with-single_samplenf-and-multi_samplenf)
+* [Phase variants with `phase.nf`](https://github.com/olavurmortensen/linkseq#phase-variants-with-phasenf)
+* [Reference resources](https://github.com/olavurmortensen/linkseq#reference-resources)
+	* [Barcode whitelist](https://github.com/olavurmortensen/linkseq#barcode-whitelist)
+	* [GATK resources](https://github.com/olavurmortensen/linkseq#gatk-resources)
+	* [Exome sequencing targets](https://github.com/olavurmortensen/linkseq#exome-sequencing-targets)
+
+## Overview
 
 This pipeline basecalls/demultiplexes and aligns [linked-reads from 10x Genomics](https://www.10xgenomics.com/linked-reads/) and calls variants with GAKT. Specifically, germline short variant discovery (SNPs and indels) is performed according to [GATK best-practices](https://software.broadinstitute.org/gatk/best-practices/workflow?id=11145).
 
