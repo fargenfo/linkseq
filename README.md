@@ -30,7 +30,12 @@ This pipeline makes some assumptions about the input data. For example, it makes
 
 ### Trimming
 
-**TODO:** an explaination of the trimming steps.
+There are four trimming steps in the `demux.nf` pipeline, each of which is listed below.
+
+* `trim_adapters` trims adapter sequences from 3' end using [BBtools/BBDuk](https://jgi.doe.gov/data-and-tools/bbtools/bb-tools-user-guide/bbduk-guide/).
+* `bctrim` trims linked-read barcodes from read 2. The `trimR2bc.py` is written by Elisabet Thomsen and can be found in the [bin folder](https://github.com/olavurmortensen/linkseq/blob/master/bin/trimR2bc.py) of this project. When the insert size is small and read 1 and 2 overlap, read 2 may be contaminated by the barcode attached to read 1.
+* `polyG_trim` trims poly-G tails from reads using [fastp](https://github.com/OpenGene/fastp).
+* `quality_trim_read1`/`quality_trim_read2` trims low quality bases from read 1 and 2 respectively.
 
 ### Setup
 
