@@ -27,14 +27,12 @@ rundir = file(params.rundir)
 outdir = file(params.outdir)
 samplesheet = file(params.samplesheet)
 whitelist = file(params.whitelist)
-interop_dir = file(outdir + "InterOp")
 
 println "D E M U X    L I N K S E Q   "
 println "================================="
 println "rundir              : ${rundir}"
 println "outdir              : ${outdir}"
 println "samplesheet         : ${samplesheet}"
-println "interop_dir         : ${interop_dir}"
 println "================================="
 println "Command line        : ${workflow.commandLine}"
 println "Profile             : ${workflow.profile}"
@@ -405,7 +403,6 @@ workflow.onComplete {
     log.info "rundir              : ${rundir}"
     log.info "outdir              : ${outdir}"
     log.info "samplesheet         : ${samplesheet}"
-    log.info "interop_dir         : ${interop_dir}"
     log.info "================================="
     log.info "Command line        : ${workflow.commandLine}"
     log.info "Profile             : ${workflow.profile}"
