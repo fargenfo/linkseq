@@ -1,5 +1,5 @@
 
-# linkseq -- GATK best-practices pipeline adapted to linked-reads [WIP]
+# LinkSeq -- GATK best-practices pipeline adapted to linked-reads [WIP]
 
 **Note:** This pipeline is a work in progress.
 
@@ -27,6 +27,26 @@ The pipeline is written in [Nextflow](https://www.nextflow.io/) and contains sev
 This Nextflow pipeline basecalls and demultiplexes linked-reads from 10x Genomics. To run this pipeline, the 8-base sample indexes are needed, corresponding to the 10x Genomics indexes (e.g. `SI-GA-A1`).
 
 This pipeline makes some assumptions about the input data. For example, it makes the assumption that it is paired-end sequencing, and therefore uses `--use-bases-mask=Y*,I*,Y*` in `bcl2fastq`, and assumes that the read lengths (and index length) is found in `RunInfo.xml`.
+
+### Setup
+
+Pull this project with `nextflow`:
+
+```
+nextflow pull https://github.com/olavurmortensen/linkseq
+```
+
+Install dependencies with `conda` using the [conda_envs/demux.yml file](https://github.com/olavurmortensen/linkseq/blob/master/conda_envs/demux.yml):
+
+```
+conda env create -f demux.yml
+```
+
+Activate the environment (check the name of the environment, it should be `linkseq-demux`):
+
+```
+conda activate linkseq-demux
+```
 
 ### Running on tiny-bcl
 
