@@ -12,7 +12,7 @@
 	* [Running on tiny-bcl](https://github.com/olavurmortensen/linkseq#running-on-tiny-bcl)
 		* [Running demux pipeline](https://github.com/olavurmortensen/linkseq#run-demux-pipeline)
 		* [Output](https://github.com/olavurmortensen/linkseq#output)
-* [Align reads and call variants with `single_sample.nf` and `multi_sample.nf`](https://github.com/olavurmortensen/linkseq#align-reads-and-call-variants-with-single_samplenf-and-multi_samplenf)
+* [Align reads and call variants with `single_sample.nf` and `multi_sample.nf`](#align-reads-and-call-variants-with-single_samplenf-and-multi_samplenf)
 * [Phase variants with `phase.nf`](https://github.com/olavurmortensen/linkseq#phase-variants-with-phasenf)
 * [Reference resources](https://github.com/olavurmortensen/linkseq#reference-resources)
 	* [Barcode whitelist](https://github.com/olavurmortensen/linkseq#barcode-whitelist)
