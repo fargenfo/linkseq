@@ -221,7 +221,6 @@ process extract_adapter {
 // Combine the FASTQs with the adapter FASTA file to get (key, read1 FASTQ, read2 FASTQ, adapter FASTA) tuples.
 trim_adapters_data_ch = fastq_trim_adapters_ch.combine(adapter_fasta_ch)
 
-// FIXME: output log
 // Trim adapters.
 process trim_adapters {
     publishDir "$outdir/$sample/logs/adapter_trim", mode: 'copy', pattern: 'bbduk.log', saveAs: { filename -> "${lane}.log" }
@@ -244,9 +243,6 @@ process trim_adapters {
     """
 }
 
-// FIXME:
-// Is it necessary to check if reads are synchronized?
-
 // Trim 10x barcode from read 2.
 // The barcode is taken from the first 16 bases of read 1.
 // If the barcode does not match any in the list of known barcodes (whitelist), we do not trim.
@@ -265,7 +261,6 @@ process bctrim {
     lane = key[1]
     """
     trimR2bc.py $read1 $read2 $whitelist $sample\\_$lane\\_R2\\_bctrimmed.fastq 1> bctrim_stats.log
-    # FIXME: write with gzip in the trimR2bc.py script, rather than compressing afterwards.
     gzip -k $sample\\_$lane\\_R2\\_bctrimmed.fastq
     # Even though we did not change R1, we rename it before outputting it, as having differently named R1 and R2 can cause confusion.
     cp $read1 $sample\\_$lane\\_R1\\_bctrimmed.fastq.gz
