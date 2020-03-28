@@ -98,7 +98,36 @@ nextflow run olavurmortensen/linkseq/demux.nf -c [your config]
 
 #### Output
 
+The output from the pipeline, run on the `tiny-bcl` data, is shown below. The compressed FASTQ data is in `outs/Sample1/fastqs`. The pipeline runs `FastQC` for quality control and the reports are in `outs/Sample1/fastqc`. There are various logs, from the basecalling itself via `Bcl2Fastq`, from the various trimming steps, from read synchronization, and from `FastQC`.
 
+```
+$ tree outs/
+outs/
+├── bcl2fastq.log
+└── Sample1
+    ├── fastqc
+    │   ├── fastqc.log
+    │   ├── Sample1_L005_R1_fastqc.html
+    │   ├── Sample1_L005_R2_fastqc.html
+    │   └── zips
+    │       ├── Sample1_L005_R1_fastqc.zip
+    │       └── Sample1_L005_R2_fastqc.zip
+    ├── fastqs
+    │   ├── Sample1_L005_R1.fastq.gz
+    │   └── Sample1_L005_R2.fastq.gz
+    └── logs
+        ├── adapter_trim
+        │   └── L005.log
+        ├── bctrim
+        │   └── L005.log
+        ├── polyG_trim
+        │   └── L005.log
+        ├── quality_trim
+        │   ├── L005_R1.log
+        │   └── L005_R2.log
+        └── sync_reads
+            └── L005.log
+```
 
 ## Reference resources
 
