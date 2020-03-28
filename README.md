@@ -34,12 +34,6 @@ This pipeline makes some assumptions about the input data. For example, it makes
 
 ### Setup
 
-Pull this project with `nextflow`:
-
-```
-nextflow pull https://github.com/olavurmortensen/linkseq
-```
-
 Install dependencies with `conda` using the [conda_envs/demux.yml file](https://github.com/olavurmortensen/linkseq/blob/master/conda_envs/demux.yml):
 
 ```
@@ -50,6 +44,12 @@ Activate the environment (check the name of the environment, it should be `links
 
 ```
 conda activate linkseq-demux
+```
+
+Pull this project with `nextflow`:
+
+```
+nextflow pull https://github.com/olavurmortensen/linkseq
 ```
 
 ### Running on tiny-bcl
