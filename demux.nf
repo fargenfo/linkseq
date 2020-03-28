@@ -29,12 +29,18 @@ samplesheet = file(params.samplesheet)
 whitelist = file(params.whitelist)
 interop_dir = file(outdir + "InterOp")
 
-println "D E M U X    L I N K    "
+println "D E M U X    L I N K S E Q   "
 println "================================="
 println "rundir              : ${rundir}"
 println "outdir              : ${outdir}"
 println "samplesheet         : ${samplesheet}"
 println "interop_dir         : ${interop_dir}"
+println "================================="
+println "Project : $workflow.projectDir"
+println "Git info: $workflow.repository - $workflow.revision [$workflow.commitId]"
+println "Cmd line: $workflow.commandLine"
+println "Manifest's pipeline version: $workflow.manifest.version"
+println "================================="
 
 // Call bcl2fastq, performing simultaneous basecalling and demultiplexing.
 // --use-bases-mask will use RunInfo.xml (in the run directory) to determine the length of read 1 and 2
