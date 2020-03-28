@@ -1,7 +1,0 @@
-The whitelist contains barcodes in the 10X Genomics GemCode technology, and can be obtained in the LongRanger software bundle here:
-
-longranger-2.y.z/longranger-cs/2.y.z/tenkit/lib/python/tenkit/barcodes/4M-with-alts-february-2016.txt
-
-LongRanger can be obtained on the 10X Genomics website:
-
-https://support.10xgenomics.com/genome-exome/software/overview/welcome
