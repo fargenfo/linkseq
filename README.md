@@ -22,11 +22,15 @@ The pipeline is written in [Nextflow](https://www.nextflow.io/) and contains sev
 * Process all your samples individualy with `single_sample.nf`
 * Process your samples jointly with `multi_sample.nf`
 
-## Basecalling/demultiplexing
+## Basecalling/demultiplexing and trimming with `demux`
 
 This Nextflow pipeline basecalls and demultiplexes linked-reads from 10x Genomics. To run this pipeline, the 8-base sample indexes are needed, corresponding to the 10x Genomics indexes (e.g. `SI-GA-A1`).
 
 This pipeline makes some assumptions about the input data. For example, it makes the assumption that it is paired-end sequencing, and therefore uses `--use-bases-mask=Y*,I*,Y*` in `bcl2fastq`, and assumes that the read lengths (and index length) is found in `RunInfo.xml`.
+
+### Trimming
+
+**TODO:** an explaination of the trimming steps.
 
 ### Setup
 
@@ -74,15 +78,19 @@ Lane,Sample_ID,index
 
 Using that the index `SI-GA-C5` corresponds to the four octamers `CGACTTGA,TACAGACT,ATTGCGTG,GCGTACAC` (10X Genomics have a tool for this on [their website](https://support.10xgenomics.com/genome-exome/software/pipelines/latest/using/bcl2fastq-direct)). Notice that we also removed the `Sample_Project` column.
 
-Provided that you've set installed all the software in `environment.yml` (or maybe used this pipeline's Docker container at https://hub.docker.com/r/olavurmortensen/exolink), you should be able to run the pipeline like this:
+#### Run demux pipeline
+
+Use the `example_config/demux.config` to get an idea how to define input parameters. For the `tiny-bcl` dataset, you should set `rundir` to `tiny-bcl-2.0.0` and `samplesheet` to `tiny-bcl-samplesheet-2.1.0.csv`. Additionally, you need the barcode whitelist, which you can get in the [reference/whitelist subfolder of this project](https://github.com/olavurmortensen/linkseq/tree/master/reference/whitelist).
+
+When you've made the config file and activated the `linkseq-demux` environment, run the pipeline like this:
 
 ```
-nextflow exolink/scripts/demux/demux.nf --rundir tiny-bcl-2.2.0 --outdir results --samplesheet tiny-bcl-samplesheet-2.1.0.csv
+nextflow run olavurmortensen/linkseq/demux.nf -c [your config]
 ```
 
-And get the FASTQ files in `results/fastq_out/Sample1/outs` and the FastQC reports in `results/fastqc/Sample1`.
+#### Output
 
-**FIXME:** How to run rest of pipeline.
+
 
 ## Reference resources
 
