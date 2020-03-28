@@ -72,7 +72,7 @@ Lane,Sample_ID,index
 5,Sample1,GCGTACAC
 ```
 
-Using that the index `SI-GA-C5` corresponds to the four octamers `CGACTTGA,TACAGACT,ATTGCGTG,GCGTACAC`. Notice that we also removed the `Sample_Project` column.
+Using that the index `SI-GA-C5` corresponds to the four octamers `CGACTTGA,TACAGACT,ATTGCGTG,GCGTACAC` (10X Genomics have a tool for this on [their website](https://support.10xgenomics.com/genome-exome/software/pipelines/latest/using/bcl2fastq-direct)). Notice that we also removed the `Sample_Project` column.
 
 Provided that you've set installed all the software in `environment.yml` (or maybe used this pipeline's Docker container at https://hub.docker.com/r/olavurmortensen/exolink), you should be able to run the pipeline like this:
 
