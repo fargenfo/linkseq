@@ -112,6 +112,8 @@ fastq_samplenames_ch.flatten()
 // Since this process is only concatenating (cat) and zipping files, it doesn't need much memory or many cores.
 // We use the "when" directive to avoid processing the "Undetermined" sample.
 process merge {
+    label 'small_mem'
+
     input:
     set key, file(fastqs) from fastq_ch
 
@@ -200,6 +202,8 @@ fastq_temp_ch = fastq_temp_ch.map { it ->
 // Check that the read 1 and 2 are synchronized. If they are not, this process will throw an error
 // and the pipeline will exit.
 process check_merge_sync {
+    label 'small_mem'
+
     input:
     set key, file(read1), file(read2) from fastq_check_merge_sync_ch
 
@@ -214,6 +218,8 @@ process check_merge_sync {
 
 // Parses samplesheet and saves adapter in a FASTA file.
 process extract_adapter {
+    label 'small_mem'
+
     output:
     file "adapter.fasta" into adapter_fasta_ch
 
@@ -228,6 +234,8 @@ trim_adapters_data_ch = fastq_trim_adapters_ch.combine(adapter_fasta_ch)
 
 // Trim adapters.
 process trim_adapters {
+    label 'small_mem'
+
     publishDir "$outdir/$sample/logs/adapter_trim", mode: 'copy', pattern: 'bbduk.log', saveAs: { filename -> "${lane}.log" }
 
     input:
@@ -251,7 +259,10 @@ process trim_adapters {
 // Trim 10x barcode from read 2.
 // The barcode is taken from the first 16 bases of read 1.
 // If the barcode does not match any in the list of known barcodes (whitelist), we do not trim.
+// FIXME: trimR2bc.py reads FASTQ records in chunks. If these chunks are large, this process may require a non-trivial amount of memory.
 process bctrim {
+    label 'small_mem'
+
     publishDir "$outdir/$sample/logs/bctrim", mode: 'copy', pattern: 'bctrim_stats.log', saveAs: { filename -> "${lane}.log" }
 
     input:
@@ -275,6 +286,8 @@ process bctrim {
 // Check that the read 1 and 2 are synchronized. If they are not, this process will throw an error
 // and the pipeline will exit.
 process check_bctrim_sync {
+    label 'small_mem'
+
     input:
     set key, file(read1), file(read2) from fastq_check_bctrim_sync_ch
 
@@ -286,6 +299,7 @@ process check_bctrim_sync {
 }
 
 // Trim poly-G tail.
+// FIXME: how much memory does fastp actually need?
 process polyG_trim {
     publishDir "$outdir/$sample/logs/polyG_trim", mode: 'copy', pattern: 'polyG_trim.log', saveAs: { filename -> "${lane}.log" }
 
@@ -308,6 +322,7 @@ process polyG_trim {
 }
 
 // Do quality trimming and minimum length filtering (read 1).
+// FIXME: how much memory does sickle actually need?
 process quality_trim_read1 {
     publishDir "$outdir/$sample/logs/quality_trim", mode: 'copy', pattern: 'sickle.log', saveAs: { filename -> "${lane}_R1.log" }
 
@@ -372,7 +387,10 @@ process sync_qtrim_reads {
 }
 
 // Run FastQC for QC metrics of raw data.
+// NOTE: FastQC claims 250 MB of memory for every thread that is allocated to it.
 process fastqc_analysis {
+    memory { 250.MB * task.cpus }
+
     publishDir "$outdir/$sample/fastqc", mode: 'copy', pattern: '{*.zip,*.html}',
         saveAs: {filename -> filename.indexOf('.zip') > 0 ? "zips/$filename" : "$filename"}
     publishDir "$outdir/$sample/fastqc", mode: 'copy', pattern: '.command.log',
