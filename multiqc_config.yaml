@@ -4,7 +4,7 @@
 
 bcl2fastq:
     - 
-        fn: Stats.json
+        fn: bcl2fastq_stats.json
         contents: DemuxResults
     - 
         num_lines: 300

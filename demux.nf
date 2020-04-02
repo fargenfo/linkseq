@@ -52,8 +52,8 @@ println "================================="
 // and of the index.
 // Adapter sequences (read 1 and read2) should be contained in the sample sheet.
 process bcl2fastq {
-    publishDir "$outdir", mode: 'copy', pattern: '.command.log', saveAs: {filename -> 'bcl2fastq.log'}
-    publishDir "$outdir", mode: 'copy', pattern: 'outs/Stats/Stats.json', saveAs: {filename -> 'bcl2fastq_stats.json'}
+    publishDir "$outdir", mode: 'copy', pattern: '.command.log', saveAs: {filename -> 'bcl2fastq/log.log'}
+    publishDir "$outdir", mode: 'copy', pattern: 'outs/Stats/Stats.json', saveAs: {filename -> 'bcl2fastq/Stats.json'}
 
     output:
     file "outs/*fastq.gz" into fastq_trim_adapters_ch
@@ -370,7 +370,6 @@ process multiqc {
     script:
     """
     multiqc -f $outdir
-    #multiqc -f $outdir --config \${params.multiqc_config}
     """
 }
 
