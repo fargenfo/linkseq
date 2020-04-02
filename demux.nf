@@ -55,7 +55,7 @@ process bcl2fastq {
     publishDir "$outdir", mode: 'copy', pattern: '.command.log', saveAs: {filename -> 'bcl2fastq.log'}
 
     output:
-    file "outs/*fastq.gz" into fastq_samplenames_ch
+    file "outs/*fastq.gz" into fastq_trim_adapters_ch
     file '.command.log'
 
     script:
@@ -92,77 +92,38 @@ process bcl2fastq {
     """
 }
 
-// Prepare the channel for the merge process.
+// Prepare the data channel for the trim_adapters process. We require (sample, lane, FASTQ read 1, FASTQ read 2) tuples.
 
-// Get (key, FASTQ files) tuples, where key is a (sample names, lane, read) tuple.
+// Get (key, FASTQ files) tuples, where key is a (sample, lane) tuple.
 // First flatten the channel because each instance of process "bcl2fastq" outputs a tuple.
 // Then map the channel to (key, FASTQ path) tuples. This channel has one record per file.
-// Then group by key to get (key, FASTQ list) tuples.
-fastq_samplenames_ch.flatten()
+// Then group the records by key to obtain records with (key, FASTQ list) tuples, where
+// "key" is unchanged and "FASTQ list" is a list of FASTQ files (read 1 and 2, specifically).
+fastq_trim_adapters_ch.flatten()
     .map { file ->
+        // Note that it is not necessary to extract all these fields, it's done for clarity.
         def sample = file.name.toString().split('_')[0]
+        def number = file.name.toString().split('_')[1]
         def lane = file.name.toString().split('_')[2]
         def read = file.name.toString().split('_')[3]
-        def key = tuple(sample, lane, read)
-        return tuple(key, file)}
-    .groupTuple().set { fastq_ch }
-
-
-// Since 10x samples have multiple indexes per sample, we merge these.
-// Since this process is only concatenating (cat) and zipping files, it doesn't need much memory or many cores.
-// We use the "when" directive to avoid processing the "Undetermined" sample.
-process merge {
-    label 'small_mem'
-
-    input:
-    set key, file(fastqs) from fastq_ch
-
-    output:
-    set sample, file("*merged.fastq.gz") into fastq_merged_ch
-
-    when:
-    key[0] != "Undetermined"
-
-    script:
-    sample = key[0]
-    lane = key[1]
-    read = key[2]
-    // If there are multiple FASTQs in the input, sort the names so that they are merged in the proper order.
-    if(fastqs instanceof Tuple) {
-        fastqs = (fastqs as List)
-        fastqs = fastqs.sort().join(' ')
-    }
-    """
-    # Note: Piping the zcat output to gzip causes "unexpected end of file" errors sporadically.
-    # Therefore, the zcat and gzip are done in separate steps.
-    zcat $fastqs > $sample\\_$lane\\_$read\\_merged.fastq
-    gzip $sample\\_$lane\\_$read\\_merged.fastq
-    """
-}
-
-
-// Prepare input channel for check_sync and and trim_adapters.
-
-// Get (key, FASTQ files) tuples, where key is a (samplename, lane) tuple.
-// Then map the channel to (key, FASTQ path) tuples. This channel has one record per file.
-// Then group by key to get (key, FASTQ list) tuples.
-fastq_temp_ch = fastq_merged_ch.map { it ->
-        // The record is a (sample, FASTQ file) tuple.
-        def sample = it[0]
-        def file = it[1]
-        // Process the file string to get the lane number.
-        def lane = file.name.toString().split('_')[1]
         def key = tuple(sample, lane)
-        return tuple(key, file)}
-    .groupTuple()
+        return tuple(key, file)}.groupTuple().set { fastq_trim_adapters_ch }
+
+// Remove the "Undetermined" sample from the channel.
+// This sample catches all reads that don't match any index in the sample sheet.
+fastq_trim_adapters_ch.filter { it ->
+    key = it[0]
+    sample = key[0]
+    sample != 'Undetermined'
+    }.set { fastq_trim_adapters_ch }
 
 // Convert the channel records from (key, FASTQ list) tuples to (key, read 1, read 2) tuples.
-fastq_temp_ch = fastq_temp_ch.map { it ->
+fastq_trim_adapters_ch.map { it ->
     key = it[0]
     fastq1 = it[1][0]
     fastq2 = it[1][1]
     // Get the "R1" or "R2" string from the first FASTQ.
-    fastq1_read = fastq1.baseName.toString().split('_')[2]
+    fastq1_read = fastq1.baseName.toString().split('_')[3]
     // Assign read 1 and 2 to fastq 1 and 2.
     if(fastq1_read == "R1") {
         read1 = fastq1
@@ -172,49 +133,7 @@ fastq_temp_ch = fastq_temp_ch.map { it ->
         read2 = fastq1
     }
     return tuple(key, read1, read2)}.into {
-        fastq_check_merge_sync_ch; fastq_trim_adapters_ch}
-
-//// With this process I can unsynchronize the reads to check if the "check_sync" process works.
-//process mess_up_sync_test {
-//    input:
-//    set key, file(fastqs) from fastq_check_sync_ch
-//
-//    output:
-//    set key, file("*unsynced.fastq.gz"), file(read2) into fastq_check_sync_unsynced_ch
-//
-//    script:
-//    sample = key[0]
-//    lane = key[1]
-//    read1 = fastqs[0]
-//    read2 = fastqs[1]
-//    """
-//    # Mess up read 1.
-//    # Take the first read and place it at the end of the file.
-//    zcat $read1 > temp.fastq
-//    tail -n 4 temp.fastq > $sample\\_$lane\\_R1\\_unsynced.fastq
-//    head -n -4 temp.fastq >> $sample\\_$lane\\_R1\\_unsynced.fastq
-//    gzip -k $sample\\_$lane\\_R1\\_unsynced.fastq
-//    # Can use this if I want to remove lines:
-//    #zcat $read1 | head -n -3 > $sample\\_$lane\\_R1\\_unsynced.fastq
-//    """
-//}
-
-// Check that the read 1 and 2 are synchronized. If they are not, this process will throw an error
-// and the pipeline will exit.
-process check_merge_sync {
-    label 'small_mem'
-
-    input:
-    set key, file(read1), file(read2) from fastq_check_merge_sync_ch
-
-    script:
-    sample = key[0]
-    lane = key[1]
-    """
-    # Check if reads are synchronized.
-    reformat.sh -Xmx${task.memory.toGiga()}g in=$read1 in2=$read2 vpair
-    """
-}
+        fastq_trim_adapters_ch; temp_ch}
 
 // Parses samplesheet and saves adapter in a FASTA file.
 process extract_adapter {
@@ -282,6 +201,31 @@ process bctrim {
     cp $read1 $sample\\_$lane\\_R1\\_bctrimmed.fastq.gz
     """
 }
+
+//// With this process I can unsynchronize the reads to check if the "check_sync" process works.
+//process mess_up_sync_test {
+//    input:
+//    set key, file(fastqs) from fastq_check_sync_ch
+//
+//    output:
+//    set key, file("*unsynced.fastq.gz"), file(read2) into fastq_check_sync_unsynced_ch
+//
+//    script:
+//    sample = key[0]
+//    lane = key[1]
+//    read1 = fastqs[0]
+//    read2 = fastqs[1]
+//    """
+//    # Mess up read 1.
+//    # Take the first read and place it at the end of the file.
+//    zcat $read1 > temp.fastq
+//    tail -n 4 temp.fastq > $sample\\_$lane\\_R1\\_unsynced.fastq
+//    head -n -4 temp.fastq >> $sample\\_$lane\\_R1\\_unsynced.fastq
+//    gzip -k $sample\\_$lane\\_R1\\_unsynced.fastq
+//    # Can use this if I want to remove lines:
+//    #zcat $read1 | head -n -3 > $sample\\_$lane\\_R1\\_unsynced.fastq
+//    """
+//}
 
 // Check that the read 1 and 2 are synchronized. If they are not, this process will throw an error
 // and the pipeline will exit.
