@@ -1,6 +1,11 @@
-extra_fn_clean_exts:
-  - type: regex
-    pattern: "_S.*_L.*R.*"
+#extra_fn_clean_exts:
+#    - type: regex
+#        pattern: "_S.*_L.*R.*"
 
-sample_names_ignore:
-  - '*I1*'
+bcl2fastq:
+    - 
+        fn: Stats.json
+        contents: DemuxResults
+    - 
+        num_lines: 300
+

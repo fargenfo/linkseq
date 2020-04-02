@@ -53,10 +53,12 @@ println "================================="
 // Adapter sequences (read 1 and read2) should be contained in the sample sheet.
 process bcl2fastq {
     publishDir "$outdir", mode: 'copy', pattern: '.command.log', saveAs: {filename -> 'bcl2fastq.log'}
+    publishDir "$outdir", mode: 'copy', pattern: 'outs/Stats/Stats.json', saveAs: {filename -> 'bcl2fastq_stats.json'}
 
     output:
     file "outs/*fastq.gz" into fastq_trim_adapters_ch
     file '.command.log'
+    file 'outs/Stats/Stats.json'
 
     script:
     if(task.cpus > 20) {
@@ -109,14 +111,6 @@ fastq_trim_adapters_ch.flatten()
         def key = tuple(sample, lane)
         return tuple(key, file)}.groupTuple().set { fastq_trim_adapters_ch }
 
-// Remove the "Undetermined" sample from the channel.
-// This sample catches all reads that don't match any index in the sample sheet.
-fastq_trim_adapters_ch.filter { it ->
-    key = it[0]
-    sample = key[0]
-    sample != 'Undetermined'
-    }.set { fastq_trim_adapters_ch }
-
 // Convert the channel records from (key, FASTQ list) tuples to (key, read 1, read 2) tuples.
 fastq_trim_adapters_ch.map { it ->
     key = it[0]
@@ -163,6 +157,9 @@ process trim_adapters {
     output:
     set key, file("*R1*adapter_trimmed.fastq.gz"), file("*R2*adapter_trimmed.fastq.gz") into fastq_bctrim_ch
     file 'bbduk.log'
+
+    when:
+    key[0] != "Undetermined"
 
     script:
     sample = key[0]
@@ -346,6 +343,7 @@ process fastqc_analysis {
     output:
     set sample, file('*.{zip,html}') into fastqc_report_ch
     set sample, file('.command.log') into fastqc_stdout_ch
+    val 'done' into status_ch  // Tells the MultiQC process that the pipeline is finished.
 
     script:
     //fastq_list = (fastqs as List).join(' ')
@@ -356,6 +354,23 @@ process fastqc_analysis {
     unset DISPLAY
     mkdir tmp
     fastqc -q --dir tmp --threads ${task.cpus} --outdir . $read1 $read2
+    """
+}
+
+process multiqc {
+    publishDir "$outdir/multiqc", mode: 'copy', overwrite: true
+
+    input:
+    val status from status_ch
+
+    output:
+    file "multiqc_report.html" into multiqc_report_ch
+    file "multiqc_data" into multiqc_data_ch
+
+    script:
+    """
+    multiqc -f $outdir
+    #multiqc -f $outdir --config \${params.multiqc_config}
     """
 }
 
