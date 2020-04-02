@@ -36,7 +36,7 @@ The pipeline is written in [Nextflow](https://www.nextflow.io/) and contains sev
 
 ## Workflow
 
-* Basecall and demultiplex raw sequencing data with `demux.nf`
+* Basecall and demultiplex raw sequencing data and trim reads with `demux.nf`
 * Process all your samples individualy with `single_sample.nf`
 * Process your samples jointly with `multi_sample.nf`
 
@@ -92,11 +92,11 @@ Lane,Sample_ID,index,Sample_Project
 To the following:
 
 ```
-Lane,Sample_ID,Sample_Name,index
-5,Sample1_1,Sample1,CGACTTGA
-5,Sample1_2,Sample1,TACAGACT
-5,Sample1_3,Sample1,ATTGCGTG
-5,Sample1_4,Sample1,GCGTACAC
+Lane,Sample_ID,index
+5,Sample1,CGACTTGA
+5,Sample1,TACAGACT
+5,Sample1,ATTGCGTG
+5,Sample1,GCGTACAC
 ```
 
 Using that the index `SI-GA-C5` corresponds to the four octamers `CGACTTGA,TACAGACT,ATTGCGTG,GCGTACAC` (10X Genomics have a tool for this on [their website](https://support.10xgenomics.com/genome-exome/software/pipelines/latest/using/bcl2fastq-direct)).
@@ -121,35 +121,48 @@ nextflow run olavurmortensen/linkseq/demux.nf -c [your config]
 
 #### Output
 
-The output from the pipeline, run on the `tiny-bcl` data, is shown below. The compressed FASTQ data is in `outs/Sample1/fastqs`. The pipeline runs `FastQC` for quality control and the reports are in `outs/Sample1/fastqc`. There are various logs, from the basecalling itself via `Bcl2Fastq`, from the various trimming steps, from read synchronization, and from `FastQC`.
+The output from the pipeline, run on the `tiny-bcl` data, is shown below. The compressed FASTQ data is in `outs/Sample1/fastqs`. There are various logs, from the basecalling itself via `Bcl2Fastq`, from the various trimming steps, from read synchronization, and from `FastQC`. There is also a HTML report `outs/multiqc/multiqc_report.html` that combines the statistics from `Bcl2Fastq` with the `FastQC` report.
 
 ```
 $ tree outs/
 outs/
-├── bcl2fastq.log
-└── Sample1
-    ├── fastqc
-    │   ├── fastqc.log
-    │   ├── Sample1_L005_R1_fastqc.html
-    │   ├── Sample1_L005_R2_fastqc.html
-    │   └── zips
-    │       ├── Sample1_L005_R1_fastqc.zip
-    │       └── Sample1_L005_R2_fastqc.zip
-    ├── fastqs
-    │   ├── Sample1_L005_R1.fastq.gz
-    │   └── Sample1_L005_R2.fastq.gz
-    └── logs
-        ├── adapter_trim
-        │   └── L005.log
-        ├── bctrim
-        │   └── L005.log
-        ├── polyG_trim
-        │   └── L005.log
-        ├── quality_trim
-        │   ├── L005_R1.log
-        │   └── L005_R2.log
-        └── sync_reads
-            └── L005.log
+├── Sample1
+│   ├── fastqc
+│   │   ├── Sample1_L005_R1_fastqc.html
+│   │   ├── Sample1_L005_R2_fastqc.html
+│   │   ├── fastqc.log
+│   │   └── zips
+│   │       ├── Sample1_L005_R1_fastqc.zip
+│   │       └── Sample1_L005_R2_fastqc.zip
+│   ├── fastqs
+│   │   ├── Sample1_L005_R1.fastq.gz
+│   │   └── Sample1_L005_R2.fastq.gz
+│   └── logs
+│       ├── adapter_trim
+│       │   └── L005.log
+│       ├── bctrim
+│       │   └── L005.log
+│       ├── polyG_trim
+│       │   └── L005.log
+│       ├── quality_trim
+│       │   ├── L005_R1.log
+│       │   └── L005_R2.log
+│       └── sync_reads
+│           └── L005.log
+├── bcl2fastq
+│   ├── Stats.json
+│   └── log.log
+└── multiqc
+    ├── multiqc_data
+    │   ├── multiqc.log
+    │   ├── multiqc_bcl2fastq_bylane.txt
+    │   ├── multiqc_bcl2fastq_bysample.txt
+    │   ├── multiqc_data.json
+    │   ├── multiqc_fastqc.txt
+    │   ├── multiqc_general_stats.txt
+    │   ├── multiqc_qualimap_bamqc_genome_results.txt
+    │   └── multiqc_sources.txt
+    └── multiqc_report.html
 ```
 
 
