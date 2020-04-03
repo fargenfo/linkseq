@@ -47,25 +47,15 @@ println "Cmd line            : $workflow.commandLine"
 println "Manifest version    : $workflow.manifest.version"
 println "================================="
 
-// Make sure there are no duplicate sample indexes (barcodes) in the sample sheet.
-process check_duplicate_indexes {
-    output:
-    val true into check_duplicate_indexes_status_ch
 
-    script:
-    """
-    check_duplicate_indexes.py $samplesheet
-    """
-}
-
-// Make sure no samples have underscores in their names.
+// Check various aspects of the samplesheet.
 process check_samplenames {
     output:
-    val true into check_samplenames_status_ch
+    val true into check_samplesheet_status_ch
 
     script:
     """
-    check_samplenames.py $samplesheet
+    check_samplesheet.py $samplesheet
     """
 }
 
