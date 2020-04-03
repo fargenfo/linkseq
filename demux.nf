@@ -48,17 +48,6 @@ println "Manifest version    : $workflow.manifest.version"
 println "================================="
 
 
-// Check various aspects of the samplesheet.
-process check_samplenames {
-    output:
-    val true into check_samplesheet_status_ch
-
-    script:
-    """
-    check_samplesheet.py $samplesheet
-    """
-}
-
 // Call bcl2fastq, performing simultaneous basecalling and demultiplexing.
 // --use-bases-mask will use RunInfo.xml (in the run directory) to determine the length of read 1 and 2
 // and of the index.
@@ -66,10 +55,6 @@ process check_samplenames {
 process bcl2fastq {
     publishDir "$outdir", mode: 'copy', pattern: '.command.log', saveAs: {filename -> 'bcl2fastq/log.log'}
     publishDir "$outdir", mode: 'copy', pattern: 'outs/Stats/Stats.json', saveAs: {filename -> 'bcl2fastq/Stats.json'}
-
-    input:
-    val status from check_duplicate_indexes_status_ch
-    val status from check_samplenames_status_ch
 
     output:
     file "outs/*fastq.gz" into fastq_trim_adapters_ch
