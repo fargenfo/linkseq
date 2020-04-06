@@ -80,9 +80,8 @@ the original data, it would screw up the merging process.
 
 
 // Get lists of the read 1 and 2 FASTQ files.
-// TODO: can't I just use "checkIfExists: true" here?
-fastq_r1_list = file(params.fastq_r1)
-fastq_r2_list = file(params.fastq_r2)
+fastq_r1_list = file(params.fastq_r1, checkIfExists: true)
+fastq_r2_list = file(params.fastq_r2, checkIfExists: true)
 
 // NOTE: the code below is kind of neat, but takes to much time to justify its neatness.
 //println '\nFASTQ path\t\t\t\t\tRead in pair\tSize (bytes)\tNumber of reads'
@@ -94,8 +93,6 @@ fastq_r2_list = file(params.fastq_r2)
 //}
 
 // Check that there is at least one lane and that there is the same number of lanes for both reads.
-assert fastq_r1_list.size() > 0, 'The "fastq_r1" input parameter pattern did not match any files.'
-assert fastq_r2_list.size() > 0, 'The "fastq_r2" input parameter pattern did not match any files.'
 assert fastq_r1_list.size() == fastq_r2_list.size(), 'There is an unequal number of lanes in read 1 and read 2; the fastq_r1 and fastq_r2 patterns matched an unequal number of files.'
 
 // Get FASTQ paths in channels.
