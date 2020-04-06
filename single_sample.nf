@@ -291,6 +291,8 @@ BQSR: https://software.broadinstitute.org/gatk/documentation/article?id=44
 
 // Generate recalibration table for BQSR.
 process prepare_bqsr_table {
+    publishDir "$outdir/bam/bqsr/$params.sample", mode: 'copy', overwrite: true
+
     input:
     set file(bam), file(bai) from indexed_bam_prepare_ch
 
@@ -313,7 +315,7 @@ process prepare_bqsr_table {
 
 // Evaluate BQSR.
 process analyze_covariates {
-    publishDir "$outdir/bam/recalibrated/$params.sample", mode: 'copy', overwrite: true
+    publishDir "$outdir/bam/bqsr/$params.sample", mode: 'copy', overwrite: true
 
     input:
     file bqsr_table from bqsr_table_analyze_ch
@@ -329,12 +331,11 @@ process analyze_covariates {
     """
 }
 
-// FIXME: remove "recalibrated" form path.
 // Apply recalibration to BAM file.
 process apply_bqsr {
-    publishDir "$outdir/bam/recalibrated/$params.sample", mode: 'copy', pattern: '*.bam', overwrite: true,
+    publishDir "$outdir/bam/$params.sample", mode: 'copy', pattern: '*.bam', overwrite: true,
         saveAs: { filename -> "${params.sample}.bam" }
-    publishDir "$outdir/bam/recalibrated/$params.sample", mode: 'copy', pattern: '*.bam.bai', overwrite: true,
+    publishDir "$outdir/bam/$params.sample", mode: 'copy', pattern: '*.bam.bai', overwrite: true,
         saveAs: { filename -> "${params.sample}.bam.bai" }
 
     input:
@@ -401,7 +402,7 @@ Below we perform QC of data.
 // FIXME: fix the target BED file outside of the pipeline. This is really messy.
 // Run Qualimap for QC metrics of recalibrated BAM.
 process qualimap_analysis {
-    publishDir "$outdir/bam/recalibrated/$params.sample", mode: 'copy', overwrite: true
+    publishDir "$outdir/bam/$params.sample", mode: 'copy', overwrite: true
 
     input:
     set file(bam), file(bai) from recalibrated_bam_qualimap_ch
