@@ -129,8 +129,6 @@ process merge_lanes {
     """
 }
 
-// TODO: check that reads are synchronized. If they are not, synchronize them.
-
 // Interleave reads 1 and 2.
 process interleave_fastq {
     input:
@@ -138,11 +136,23 @@ process interleave_fastq {
     file r2 from merged_fastq_r2_ch
 
     output:
-    file 'interleaved.fastq' into fastq_count_ch, fastq_preproc_ch, fastq_readgroup_ch
+    file 'interleaved.fastq' into fastq_count_ch, fastq_preproc_ch, fastq_readgroup_ch, fastq_check_sync_ch
 
     script:
     """
     interleave_fastq.sh $r1 $r2 > 'interleaved.fastq'
+    """
+}
+
+// In the unlikely event that either the merging or interleaving procedures went wrong, this process
+// will see that the reads are out of sync and throw an error.
+process check_sync {
+    input:
+    file fastq from fastq_check_sync_ch
+
+    script:
+    """
+    reformat.sh in=$fastq vpair
     """
 }
 
