@@ -13,6 +13,7 @@ TODO:
 // Input parameters.
 params.fastq_r1 = null
 params.fastq_r2 = null
+params.sample = null
 params.reference = null
 params.targets = null
 params.whitelist = null
@@ -37,6 +38,7 @@ if (params.help){
 // Make sure necessary input parameters are assigned.
 assert params.fastq_r1 != null, 'Input parameter "fastq_r1" cannot be unasigned.'
 assert params.fastq_r2 != null, 'Input parameter "fastq_r2" cannot be unasigned.'
+assert params.sample != null, 'Input parameter "sample" cannot be unasigned.'
 assert params.reference != null, 'Input parameter "reference" cannot be unasigned.'
 assert params.targets != null, 'Input parameter "targets" cannot be unasigned.'
 assert params.whitelist != null, 'Input parameter "whitelist" cannot be unasigned.'
@@ -48,6 +50,7 @@ println "P I P E L I N E     I P U T S    "
 println "================================="
 println "fastq_r1           : ${params.fastq_r1}"
 println "fastq_r2           : ${params.fastq_r2}"
+println "sample             : ${params.sample}"
 println "reference          : ${params.reference}"
 println "targets            : ${params.targets}"
 println "whitelist          : ${params.whitelist}"
@@ -77,6 +80,7 @@ the original data, it would screw up the merging process.
 
 
 // Get lists of the read 1 and 2 FASTQ files.
+// TODO: can't I just use "checkIfExists: true" here?
 fastq_r1_list = file(params.fastq_r1)
 fastq_r2_list = file(params.fastq_r2)
 
@@ -89,16 +93,14 @@ fastq_r2_list = file(params.fastq_r2)
 //    println "${item.getName()}\t\tSecond\t\t${item.size()}\t\t${item.countFastq()}"
 //}
 
-println '==================================\n'
-
 // Check that there is at least one lane and that there is the same number of lanes for both reads.
 assert fastq_r1_list.size() > 0, 'The "fastq_r1" input parameter pattern did not match any files.'
 assert fastq_r2_list.size() > 0, 'The "fastq_r2" input parameter pattern did not match any files.'
 assert fastq_r1_list.size() == fastq_r2_list.size(), 'There is an unequal number of lanes in read 1 and read 2; the fastq_r1 and fastq_r2 patterns matched an unequal number of files.'
 
 // Get FASTQ paths in channels.
-Channel.fromPath(params.fastq_r1).into { fastq_r1_merge_ch; fastq_r1_samplename_ch; fastq_r1_readgroup_ch }
-fastq_r2_merge_ch = Channel.fromPath(params.fastq_r2)
+Channel.fromPath(params.fastq_r1).set { fastq_r1_merge_ch  }
+Channel.fromPath(params.fastq_r2).set { fastq_r2_merge_ch  }
 
 /*
 First, we align the data to reference with EMA. In order to do so, we need to do some pre-processing, including,
@@ -139,7 +141,7 @@ process interleave_fastq {
     file r2 from merged_fastq_r2_ch
 
     output:
-    file 'interleaved.fastq' into fastq_count_ch, fastq_preproc_ch
+    file 'interleaved.fastq' into fastq_count_ch, fastq_preproc_ch, fastq_readgroup_ch
 
     script:
     """
@@ -182,33 +184,15 @@ process preproc {
     """
 }
 
-// Construct a readgroup from the filename of one of the input FASTQ files.
-process get_samplename {
-    input:
-    file fastq_r1 from fastq_r1_samplename_ch.collect()
-
-    output:
-    stdout sample_ch
-
-    script:
-    // Use just the first FASTQ file in the list.
-    fastq = fastq_r1[0]
-    """
-    get_samplenames.py $fastq
-    """
-}
-
 // Construct a readgroup from the sequence identifier in one of the input FASTQ files.
 process get_readgroup {
     input:
-    file fastq_r1 from fastq_r1_readgroup_ch.collect()
+    file fastq from fastq_readgroup_ch
 
     output:
     stdout readgroup_ch
 
     script:
-    // Use just the first FASTQ file in the list.
-    fastq = fastq_r1[0]
     """
     get_readgroups.py $fastq
     """
@@ -306,10 +290,9 @@ process mark_dup {
 process index_bam {
     input:
     file bam from marked_bam_index_ch
-    val sample from sample_ch
 
     output:
-    set sample, file("$bam"), file("${bam}.bai") into indexed_bam_prepare_ch, indexed_bam_apply_ch
+    set file("$bam"), file("${bam}.bai") into indexed_bam_prepare_ch, indexed_bam_apply_ch
 
     script:
     """
@@ -326,10 +309,10 @@ BQSR: https://software.broadinstitute.org/gatk/documentation/article?id=44
 // Generate recalibration table for BQSR.
 process prepare_bqsr_table {
     input:
-    set sample, file(bam), file(bai) from indexed_bam_prepare_ch
+    set file(bam), file(bai) from indexed_bam_prepare_ch
 
     output:
-    set sample, file('bqsr.table') into bqsr_table_analyze_ch, bqsr_table_apply_ch
+    file 'bqsr.table' into bqsr_table_analyze_ch, bqsr_table_apply_ch
 
     script:
     """
@@ -347,13 +330,13 @@ process prepare_bqsr_table {
 
 // Evaluate BQSR.
 process analyze_covariates {
-    publishDir "$outdir/bam/recalibrated/$sample", mode: 'copy', overwrite: true
+    publishDir "$outdir/bam/recalibrated/$params.sample", mode: 'copy', overwrite: true
 
     input:
-    set sample, file(bqsr_table) from bqsr_table_analyze_ch
+    file bqsr_table from bqsr_table_analyze_ch
 
     output:
-    set sample, file('AnalyzeCovariates.pdf') into bqsr_analysis_ch
+    file 'AnalyzeCovariates.pdf' into bqsr_analysis_ch
 
     script:
     """
@@ -368,16 +351,16 @@ data_apply_bqsr_ch = indexed_bam_apply_ch.join(bqsr_table_apply_ch)
 
 // Apply recalibration to BAM file.
 process apply_bqsr {
-    publishDir "$outdir/bam/recalibrated/$sample", mode: 'copy', pattern: '*.bam', overwrite: true,
-        saveAs: { filename -> "${sample}.bam" }
-    publishDir "$outdir/bam/recalibrated/$sample", mode: 'copy', pattern: '*.bam.bai', overwrite: true,
-        saveAs: { filename -> "${sample}.bam.bai" }
+    publishDir "$outdir/bam/recalibrated/$params.sample", mode: 'copy', pattern: '*.bam', overwrite: true,
+        saveAs: { filename -> "${params.sample}.bam" }
+    publishDir "$outdir/bam/recalibrated/$params.sample", mode: 'copy', pattern: '*.bam.bai', overwrite: true,
+        saveAs: { filename -> "${params.sample}.bam.bai" }
 
     input:
-    set sample, file(bam), file(bai), file(bqsr_table) from data_apply_bqsr_ch
+    set file(bam), file(bai), file(bqsr_table) from data_apply_bqsr_ch
 
     output:
-    set sample, file("recalibrated.bam"), file("recalibrated.bam.bai") into recalibrated_bam_call_ch, recalibrated_bam_qualimap_ch
+    set file("recalibrated.bam"), file("recalibrated.bam.bai") into recalibrated_bam_call_ch, recalibrated_bam_qualimap_ch
 
     script:
     """
@@ -399,17 +382,17 @@ process call_sample {
     publishDir "$outdir/gvcf", mode: 'copy', overwrite: true
 
     input:
-    set sample, file(bam), file(bai) from recalibrated_bam_call_ch
+    set file(bam), file(bai) from recalibrated_bam_call_ch
 
     output:
-    set sample, file("${sample}.g.vcf"), file("${sample}.g.vcf.idx") into gvcf_ch
+    set file("${params.sample}.g.vcf"), file("${params.sample}.g.vcf.idx") into gvcf_ch
 
     script:
     """
     mkdir tmp
     gatk HaplotypeCaller  \
         -I $bam \
-        -O "${sample}.g.vcf" \
+        -O "${params.sample}.g.vcf" \
         -R $reference \
         -L $targets \
         --dbsnp $dbsnp \
@@ -433,13 +416,13 @@ Below we perform QC of data.
 
 // Run Qualimap for QC metrics of recalibrated BAM.
 process qualimap_analysis {
-    publishDir "$outdir/bam/recalibrated/$sample", mode: 'copy', overwrite: true
+    publishDir "$outdir/bam/recalibrated/$params.sample", mode: 'copy', overwrite: true
 
     input:
-    set sample, file(bam), file(bai) from recalibrated_bam_qualimap_ch
+    set file(bam), file(bai) from recalibrated_bam_qualimap_ch
 
     output:
-    set sample, file("qualimap_results") into qualimap_results_ch
+    file "qualimap_results" into qualimap_results_ch
 
     script:
     """

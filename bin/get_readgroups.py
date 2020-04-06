@@ -18,7 +18,7 @@ fastq_path = sys.argv[1]
 platform = 'Illumina'
 
 # Open gzipped FASTQ file in "read text" mode.
-with gzip.open(fastq_path, 'rt') as fid:
+with open(fastq_path, 'rt') as fid:
     # Read the first line and remove the newline.
     line = fid.readline().strip()
 
