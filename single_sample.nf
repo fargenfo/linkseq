@@ -70,9 +70,6 @@ outdir = file(params.outdir)
 fastq_r1_list = file(params.fastq_r1, checkIfExists: true)
 fastq_r2_list = file(params.fastq_r2, checkIfExists: true)
 
-// Check that there is at least one lane and that there is the same number of lanes for both reads.
-assert fastq_r1_list.size() == fastq_r2_list.size(), 'There is an unequal number of lanes in read 1 and read 2; the fastq_r1 and fastq_r2 patterns matched an unequal number of files.'
-
 // Get FASTQ paths in channels.
 Channel.fromPath(params.fastq_r1).set { fastq_r1_merge_ch  }
 Channel.fromPath(params.fastq_r2).set { fastq_r2_merge_ch  }
