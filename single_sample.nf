@@ -329,9 +329,7 @@ process analyze_covariates {
     """
 }
 
-// Pair the BAM and the BQSR table in one "set" channel.
-data_apply_bqsr_ch = indexed_bam_apply_ch.join(bqsr_table_apply_ch)
-
+// FIXME: remove "recalibrated" form path.
 // Apply recalibration to BAM file.
 process apply_bqsr {
     publishDir "$outdir/bam/recalibrated/$params.sample", mode: 'copy', pattern: '*.bam', overwrite: true,
@@ -340,7 +338,8 @@ process apply_bqsr {
         saveAs: { filename -> "${params.sample}.bam.bai" }
 
     input:
-    set file(bam), file(bai), file(bqsr_table) from data_apply_bqsr_ch
+    set file(bam), file(bai) from indexed_bam_apply_ch
+    file bqsr_table from bqsr_table_apply_ch
 
     output:
     set file("recalibrated.bam"), file("recalibrated.bam.bai") into recalibrated_bam_call_ch, recalibrated_bam_qualimap_ch
@@ -360,43 +359,46 @@ process apply_bqsr {
     """
 }
 
-// Call variants in sample with HapltypeCaller, yielding a GVCF.
-process call_sample {
-    publishDir "$outdir/gvcf", mode: 'copy', overwrite: true
+// FIXME: make a bqsr table of the recalibrated data (i.e. call BaseRecalibrator one more time).
 
-    input:
-    set file(bam), file(bai) from recalibrated_bam_call_ch
-
-    output:
-    set file("${params.sample}.g.vcf"), file("${params.sample}.g.vcf.idx") into gvcf_ch
-
-    script:
-    """
-    mkdir tmp
-    gatk HaplotypeCaller  \
-        -I $bam \
-        -O "${params.sample}.g.vcf" \
-        -R $reference \
-        -L $targets \
-        --dbsnp $dbsnp \
-        -ERC GVCF \
-        --create-output-variant-index \
-        --annotation MappingQualityRankSumTest \
-        --annotation QualByDepth \
-        --annotation ReadPosRankSumTest \
-        --annotation RMSMappingQuality \
-        --annotation FisherStrand \
-        --annotation Coverage \
-        --verbosity INFO \
-        --tmp-dir=tmp \
-        --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
-    """
-}
+//// Call variants in sample with HapltypeCaller, yielding a GVCF.
+//process call_sample {
+//    publishDir "$outdir/gvcf", mode: 'copy', overwrite: true
+//
+//    input:
+//    set file(bam), file(bai) from recalibrated_bam_call_ch
+//
+//    output:
+//    set file("${params.sample}.g.vcf"), file("${params.sample}.g.vcf.idx") into gvcf_ch
+//
+//    script:
+//    """
+//    mkdir tmp
+//    gatk HaplotypeCaller  \
+//        -I $bam \
+//        -O "${params.sample}.g.vcf" \
+//        -R $reference \
+//        -L $targets \
+//        --dbsnp $dbsnp \
+//        -ERC GVCF \
+//        --create-output-variant-index \
+//        --annotation MappingQualityRankSumTest \
+//        --annotation QualByDepth \
+//        --annotation ReadPosRankSumTest \
+//        --annotation RMSMappingQuality \
+//        --annotation FisherStrand \
+//        --annotation Coverage \
+//        --verbosity INFO \
+//        --tmp-dir=tmp \
+//        --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
+//    """
+//}
 
 /*
 Below we perform QC of data.
 */
 
+// FIXME: fix the target BED file outside of the pipeline. This is really messy.
 // Run Qualimap for QC metrics of recalibrated BAM.
 process qualimap_analysis {
     publishDir "$outdir/bam/recalibrated/$params.sample", mode: 'copy', overwrite: true
