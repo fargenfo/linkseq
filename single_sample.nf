@@ -418,7 +418,6 @@ process bqsr_second_pass {
 Below we perform QC of data.
 */
 
-// FIXME: fix the target BED file outside of the pipeline. This is really messy.
 // Run Qualimap for QC metrics of recalibrated BAM.
 process qualimap_analysis {
     publishDir "$outdir/bam", mode: 'copy', overwrite: true
@@ -432,25 +431,13 @@ process qualimap_analysis {
 
     script:
     """
-    # This first line adds two columns to our BED file with target regions, as QualiMap expects these.
-    # The fifth and sixth column are respectively just "0" and ".", which has no information about the
-    # regions.
-    awk 'BEGIN{OFS="\\t"}{ if(NR > 2) { print \$1,\$2,\$3,\$4,0,"." } }' $targets > 'targets_6_fields.bed'
-
-    # FIXME:
-    # remove this when done testing.
-    # and uncomment awk command above
-    #echo 'track name="dummy" description="dummy BED" color=0,0,128 db=hg38' > 'targets_6_fields.bed'
-    #echo 'chr17    1  83257441 allchr17   0   .' > 'targets_6_fields.bed'
-    # FIXME
-
     # Make sure QualiMap doesn't attemt to open a display server.
     unset DISPLAY
     # Run QualiMap.
     qualimap bamqc \
         -gd HUMAN \
         -bam $bam \
-        -gff 'targets_6_fields.bed' \
+        -gff $targets \
         -outdir "qualimap_results" \
         --skip-duplicated \
         --collect-overlap-pairs \
