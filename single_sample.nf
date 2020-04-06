@@ -66,31 +66,9 @@ whitelist = file(params.whitelist, checkIfExists: true)
 dbsnp = file(params.dbsnp, checkIfExists: true)
 outdir = file(params.outdir)
 
-/*
-TODO:
-
-* Check that all read 1 and 2 FASTQs have matching number of records. Not only would the alternative be an issue with
-the original data, it would screw up the merging process.
-* Could check if the file is compressed, using cheking that item.getExtension() is 'gz'.
-* Could check that there there are matching lanes, R1 and R2 for L0001 and so on.
-* Check that FASTQs are "valid", e.g. with FastQValidator:
-    * https://genome.sph.umich.edu/wiki/FastQValidator
-
-*/
-
-
 // Get lists of the read 1 and 2 FASTQ files.
 fastq_r1_list = file(params.fastq_r1, checkIfExists: true)
 fastq_r2_list = file(params.fastq_r2, checkIfExists: true)
-
-// NOTE: the code below is kind of neat, but takes to much time to justify its neatness.
-//println '\nFASTQ path\t\t\t\t\tRead in pair\tSize (bytes)\tNumber of reads'
-//fastq_r1_list.each { item ->
-//    println "${item.getName()}\t\tFirst\t\t${item.size()}\t\t${item.countFastq()}"
-//}
-//fastq_r2_list.each { item ->
-//    println "${item.getName()}\t\tSecond\t\t${item.size()}\t\t${item.countFastq()}"
-//}
 
 // Check that there is at least one lane and that there is the same number of lanes for both reads.
 assert fastq_r1_list.size() == fastq_r2_list.size(), 'There is an unequal number of lanes in read 1 and read 2; the fastq_r1 and fastq_r2 patterns matched an unequal number of files.'
@@ -103,8 +81,6 @@ Channel.fromPath(params.fastq_r2).set { fastq_r2_merge_ch  }
 First, we align the data to reference with EMA. In order to do so, we need to do some pre-processing, including,
 but not limited to, merging lanes, counting barcodes, and binning reads.
 */
-
-// TODO: make sure this sorting of FASTQ files works.
 
 // Merge all lanes in read 1 and 2.
 // If there is only one lane, all this process does is decompress the files.
