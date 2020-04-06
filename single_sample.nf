@@ -291,7 +291,7 @@ BQSR: https://software.broadinstitute.org/gatk/documentation/article?id=44
 
 // Generate recalibration table for BQSR.
 process prepare_bqsr_table {
-    publishDir "$outdir/bam/bqsr/$params.sample", mode: 'copy', overwrite: true
+    publishDir "$outdir/bam/bqsr", mode: 'copy', overwrite: true
 
     input:
     set file(bam), file(bai) from indexed_bam_prepare_ch
@@ -315,7 +315,7 @@ process prepare_bqsr_table {
 
 // Evaluate BQSR.
 process analyze_covariates {
-    publishDir "$outdir/bam/bqsr/$params.sample", mode: 'copy', overwrite: true
+    publishDir "$outdir/bam/bqsr", mode: 'copy', overwrite: true
 
     input:
     file bqsr_table from bqsr_table_analyze_ch
@@ -333,9 +333,9 @@ process analyze_covariates {
 
 // Apply recalibration to BAM file.
 process apply_bqsr {
-    publishDir "$outdir/bam/$params.sample", mode: 'copy', pattern: '*.bam', overwrite: true,
+    publishDir "$outdir/bam", mode: 'copy', pattern: '*.bam', overwrite: true,
         saveAs: { filename -> "${params.sample}.bam" }
-    publishDir "$outdir/bam/$params.sample", mode: 'copy', pattern: '*.bam.bai', overwrite: true,
+    publishDir "$outdir/bam", mode: 'copy', pattern: '*.bam.bai', overwrite: true,
         saveAs: { filename -> "${params.sample}.bam.bai" }
 
     input:
@@ -343,7 +343,7 @@ process apply_bqsr {
     file bqsr_table from bqsr_table_apply_ch
 
     output:
-    set file("recalibrated.bam"), file("recalibrated.bam.bai") into recalibrated_bam_call_ch, recalibrated_bam_qualimap_ch
+    set file("recalibrated.bam"), file("recalibrated.bam.bai") into recalibrated_bam_call_ch, recalibrated_bam_second_pass_ch, recalibrated_bam_qualimap_ch
 
     script:
     """
@@ -360,7 +360,29 @@ process apply_bqsr {
     """
 }
 
-// FIXME: make a bqsr table of the recalibrated data (i.e. call BaseRecalibrator one more time).
+// Second pass of BQSR, giving a "before and after" picture of BQSR.
+process bqsr_second_pass {
+    publishDir "$outdir/bam/bqsr", mode: 'copy', overwrite: true
+
+    input:
+    set file(bam), file(bai) from recalibrated_bam_second_pass_ch
+
+    output:
+    file 'bqsr_second_pass.table'
+
+    script:
+    """
+    mkdir tmp
+    gatk BaseRecalibrator \
+            -I $bam \
+            -R $reference \
+            -L $targets \
+            --known-sites $dbsnp \
+            -O 'bqsr_second_pass.table' \
+            --tmp-dir=tmp \
+            --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
+    """
+}
 
 //// Call variants in sample with HapltypeCaller, yielding a GVCF.
 //process call_sample {
@@ -402,13 +424,14 @@ Below we perform QC of data.
 // FIXME: fix the target BED file outside of the pipeline. This is really messy.
 // Run Qualimap for QC metrics of recalibrated BAM.
 process qualimap_analysis {
-    publishDir "$outdir/bam/$params.sample", mode: 'copy', overwrite: true
+    publishDir "$outdir/bam", mode: 'copy', overwrite: true
 
     input:
     set file(bam), file(bai) from recalibrated_bam_qualimap_ch
 
     output:
-    file "qualimap_results" into qualimap_results_ch
+    file "qualimap_results"
+    val 'done' into status_ch
 
     script:
     """
@@ -436,6 +459,22 @@ process qualimap_analysis {
         --collect-overlap-pairs \
         -nt ${task.cpus} \
         --java-mem-size=${task.memory.toGiga()}G
+    """
+}
+
+process multiqc {
+    publishDir "$outdir/multiqc", mode: 'copy', overwrite: true
+
+    input:
+    val status from status_ch
+
+    output:
+    file "multiqc_report.html" into multiqc_report_ch
+    file "multiqc_data" into multiqc_data_ch
+
+    script:
+    """
+    multiqc -f $outdir
     """
 }
 
