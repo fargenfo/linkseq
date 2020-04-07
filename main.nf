@@ -14,7 +14,6 @@ TODO:
 params.fastq_r1 = null
 params.fastq_r2 = null
 params.sample = null
-params.gvcf_mode = 'NONE'
 params.reference = null
 params.targets = null
 params.whitelist = null
@@ -52,7 +51,6 @@ println "================================="
 println "fastq_r1           : ${params.fastq_r1}"
 println "fastq_r2           : ${params.fastq_r2}"
 println "sample             : ${params.sample}"
-println "gvcf_mode          : ${params.gvcf_mode}"
 println "reference          : ${params.reference}"
 println "targets            : ${params.targets}"
 println "whitelist          : ${params.whitelist}"
@@ -71,8 +69,6 @@ outdir = file(params.outdir)
 // Get lists of the read 1 and 2 FASTQ files.
 fastq_r1_list = file(params.fastq_r1, checkIfExists: true)
 fastq_r2_list = file(params.fastq_r2, checkIfExists: true)
-
-assert params.gvcf_mode == 'NONE' || params.gvcf_mode == 'GVCF', 'Error: gvcf_mode must be either "NONE" (default) or "GVCF".'
 
 // Get FASTQ paths in channels.
 Channel.fromPath(params.fastq_r1).set { fastq_r1_merge_ch  }
@@ -393,25 +389,18 @@ process call_sample {
     set file(bam), file(bai) from recalibrated_bam_call_ch
 
     output:
-    set file("$out_name"), file("${out_name}.idx") into gvcf_ch
+    set file("gvcf.g.vcf"), file("gvcf.g.vcf.idx") into gvcf_ch
 
     script:
-    if(params.gvcf_mode) {
-        out_name = params.sample + '.g.vcf'
-        mode = 'GVCF'
-    } else {
-        out_name = params.sample + '.vcf'
-        mode = 'NONE'
-    }
     """
     mkdir tmp
     gatk HaplotypeCaller  \
         -I $bam \
-        -O "$out_name" \
+        -O "gvcf.g.vcf" \
         -R $reference \
         -L $targets \
         --dbsnp $dbsnp \
-        -ERC $mode \
+        -ERC GVCF \
         --create-output-variant-index \
         --annotation MappingQualityRankSumTest \
         --annotation QualByDepth \
@@ -424,6 +413,26 @@ process call_sample {
         --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
     """
 }
+
+process genotyping {
+    input:
+    set file(gvcf), file(idx) from gvcf_ch
+
+    output:
+    set file("genotyped.vcf"), file("genotyped.vcf.idx") into genotyped_ch
+
+    script:
+    """
+    mkdir tmp
+    gatk GenotypeGVCFs \
+        -V $gvcf \
+        -R $reference \
+        -O "genotyped.vcf" \
+        --tmp-dir=tmp \
+        --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
+    """
+}
+
 
 /*
 Below we perform QC of data.
