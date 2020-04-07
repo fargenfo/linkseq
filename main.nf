@@ -14,6 +14,7 @@ TODO:
 params.fastq_r1 = null
 params.fastq_r2 = null
 params.sample = null
+params.gvcf_mode = 'NONE'
 params.reference = null
 params.targets = null
 params.whitelist = null
@@ -51,6 +52,7 @@ println "================================="
 println "fastq_r1           : ${params.fastq_r1}"
 println "fastq_r2           : ${params.fastq_r2}"
 println "sample             : ${params.sample}"
+println "gvcf_mode          : ${params.gvcf_mode}"
 println "reference          : ${params.reference}"
 println "targets            : ${params.targets}"
 println "whitelist          : ${params.whitelist}"
@@ -69,6 +71,8 @@ outdir = file(params.outdir)
 // Get lists of the read 1 and 2 FASTQ files.
 fastq_r1_list = file(params.fastq_r1, checkIfExists: true)
 fastq_r2_list = file(params.fastq_r2, checkIfExists: true)
+
+assert params.gvcf_mode == 'NONE' || params.gvcf_mode == 'GVCF', 'Error: gvcf_mode must be either "NONE" (default) or "GVCF".'
 
 // Get FASTQ paths in channels.
 Channel.fromPath(params.fastq_r1).set { fastq_r1_merge_ch  }
@@ -381,38 +385,45 @@ process bqsr_second_pass {
     """
 }
 
-//// Call variants in sample with HapltypeCaller, yielding a GVCF.
-//process call_sample {
-//    publishDir "$outdir/gvcf", mode: 'copy', overwrite: true
-//
-//    input:
-//    set file(bam), file(bai) from recalibrated_bam_call_ch
-//
-//    output:
-//    set file("${params.sample}.g.vcf"), file("${params.sample}.g.vcf.idx") into gvcf_ch
-//
-//    script:
-//    """
-//    mkdir tmp
-//    gatk HaplotypeCaller  \
-//        -I $bam \
-//        -O "${params.sample}.g.vcf" \
-//        -R $reference \
-//        -L $targets \
-//        --dbsnp $dbsnp \
-//        -ERC GVCF \
-//        --create-output-variant-index \
-//        --annotation MappingQualityRankSumTest \
-//        --annotation QualByDepth \
-//        --annotation ReadPosRankSumTest \
-//        --annotation RMSMappingQuality \
-//        --annotation FisherStrand \
-//        --annotation Coverage \
-//        --verbosity INFO \
-//        --tmp-dir=tmp \
-//        --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
-//    """
-//}
+// Call variants in sample with HapltypeCaller, yielding a GVCF.
+process call_sample {
+    publishDir "$outdir/gvcf", mode: 'copy', overwrite: true
+
+    input:
+    set file(bam), file(bai) from recalibrated_bam_call_ch
+
+    output:
+    set file("$out_name"), file("${out_name}.idx") into gvcf_ch
+
+    script:
+    if(params.gvcf_mode) {
+        out_name = params.sample + '.g.vcf'
+        mode = 'GVCF'
+    } else {
+        out_name = params.sample + '.vcf'
+        mode = 'NONE'
+    }
+    """
+    mkdir tmp
+    gatk HaplotypeCaller  \
+        -I $bam \
+        -O "$out_name" \
+        -R $reference \
+        -L $targets \
+        --dbsnp $dbsnp \
+        -ERC $mode \
+        --create-output-variant-index \
+        --annotation MappingQualityRankSumTest \
+        --annotation QualByDepth \
+        --annotation ReadPosRankSumTest \
+        --annotation RMSMappingQuality \
+        --annotation FisherStrand \
+        --annotation Coverage \
+        --verbosity INFO \
+        --tmp-dir=tmp \
+        --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
+    """
+}
 
 /*
 Below we perform QC of data.
@@ -446,6 +457,8 @@ process qualimap_analysis {
     """
 }
 
+// FIXME: it seems like this process is imported as cached even though the qualimap process is not.
+// This means that the multiqc output folder is not updated.
 process multiqc {
     publishDir "$outdir/multiqc", mode: 'copy', overwrite: true
 
