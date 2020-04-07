@@ -13,24 +13,22 @@
 import sys, gzip, re
 
 fastq_path = sys.argv[1]
+sample = sys.argv[2]
 
 # Platform is always Illumina.
 platform = 'Illumina'
 
 # Open gzipped FASTQ file in "read text" mode.
-with open(fastq_path, 'rt') as fid:
+with gzip.open(fastq_path) as fid:
     # Read the first line and remove the newline.
     line = fid.readline().strip()
 
 # Get the instrument and the flow cell ID. Remove the "@" from the instrument ID.
-instrument = re.split(':', line)[0][1:]
-flowcell = re.split(':', line)[2]
+instrument = re.split(b':', line)[0][1:]
+flowcell = re.split(b':', line)[2]
 
-# Get the filename from the path.
-filename = re.split('/', fastq_path)[-1]
-
-# Get the sample name from the filename.
-sample = re.split('_', filename)[0]
+instrument = instrument.decode()
+flowcell = flowcell.decode()
 
 # Read group format.
 rg_format = "@RG\\tID:%s\\tPL:%s\\tPM:%s\\tPU:%s\\tSM:%s"

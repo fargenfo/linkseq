@@ -109,11 +109,11 @@ process interleave_fastq {
     file r2 from merged_fastq_r2_ch
 
     output:
-    file 'interleaved.fastq' into fastq_count_ch, fastq_preproc_ch, fastq_readgroup_ch, fastq_check_sync_ch
+    file 'interleaved.fastq.gz' into fastq_count_ch, fastq_preproc_ch, fastq_readgroup_ch, fastq_check_sync_ch
 
     script:
     """
-    reformat.sh in=$r1 in2=$r2 out=interleaved.fastq
+    reformat.sh in=$r1 in2=$r2 out=interleaved.fastq.gz
     """
 }
 
@@ -139,7 +139,7 @@ process bc_count {
 
     script:
     """
-    cat $fastq | ema count -w $whitelist -o bc_count
+    zcat $fastq | ema count -w $whitelist -o bc_count
     """
 }
 
@@ -160,7 +160,7 @@ process preproc {
 
     script:
     """
-    cat $fastq | ema preproc -h -w $whitelist -n ${params.bcbins} -t ${task.cpus} -o 'preproc_dir' $ncnt
+    zcat $fastq | ema preproc -h -w $whitelist -n ${params.bcbins} -t ${task.cpus} -o 'preproc_dir' $ncnt
     """
 }
 
@@ -174,7 +174,7 @@ process get_readgroup {
 
     script:
     """
-    get_readgroups.py $fastq
+    get_readgroups.py $fastq $params.sample
     """
 }
 
