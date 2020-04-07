@@ -87,8 +87,8 @@ process merge_lanes {
     file r2 from fastq_r2_merge_ch.toSortedList()
 
     output:
-    file 'R1.fastq' into merged_fastq_r1_ch
-    file 'R2.fastq' into merged_fastq_r2_ch
+    file 'R1.fastq.gz' into merged_fastq_r1_ch
+    file 'R2.fastq.gz' into merged_fastq_r2_ch
 
     script:
     // Sort the FASTQ lists so that they are concatenated in the same order.
@@ -97,8 +97,8 @@ process merge_lanes {
         r2 = r2.join(' ')
     }
     """
-    zcat $r1 > 'R1.fastq'
-    zcat $r2 > 'R2.fastq'
+    zcat $r1 | gzip -c > 'R1.fastq.gz'
+    zcat $r2 | gzip -c > 'R2.fastq.gz'
     """
 }
 
