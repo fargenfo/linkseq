@@ -1,0 +1,29 @@
+
+name: linkseq
+
+channels:
+  - bioconda
+  - conda-forge
+  - AgBiome
+
+dependencies:
+  - nextflow=20.01.0
+  - ema=0.6.2
+  - bwa=0.7.17
+  - samtools=1.9
+  - bbtools=37.62
+  - gatk4=4.1.0.0
+  - r-gsalib=2.1
+  - r-gplots=3.0.1.1
+  - r-ggplot2=3.1.1
+  - bxtools=0.1.0
+  - qualimap=2.2.2a
+  - multiqc=1.8
+    #  - snpeff=4.3.1t
+    #  - bcftools=1.9
+    #  - whatshap=0.18
+    #  - tabix=0.2.6
+    #  - perl-vcftools-vcf=0.1.16
+    #  - bbtools=37.62
+    #  - fastp=0.20.0
+    #  - sickle-trim=1.33
