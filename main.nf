@@ -113,7 +113,7 @@ process interleave_fastq {
 
     script:
     """
-    interleave_fastq.sh $r1 $r2 > 'interleaved.fastq'
+    reformat.sh in=$r1 in2=$r2 out=interleaved.fastq
     """
 }
 
@@ -125,7 +125,7 @@ process check_sync {
 
     script:
     """
-    reformat.sh in=$fastq vpair
+    reformat.sh in=$fastq vint
     """
 }
 
