@@ -329,18 +329,14 @@ process analyze_covariates {
 }
 
 // Apply recalibration to BAM file.
+// NOTE: this BAM will be phased at a later stage.
 process apply_bqsr {
-    publishDir "$outdir/bam", mode: 'copy', pattern: '*.bam', overwrite: true,
-        saveAs: { filename -> "${params.sample}.bam" }
-    publishDir "$outdir/bam", mode: 'copy', pattern: '*.bam.bai', overwrite: true,
-        saveAs: { filename -> "${params.sample}.bam.bai" }
-
     input:
     set file(bam), file(bai) from indexed_bam_apply_ch
     file bqsr_table from bqsr_table_apply_ch
 
     output:
-    set file("recalibrated.bam"), file("recalibrated.bam.bai") into recalibrated_bam_call_ch, recalibrated_bam_second_pass_ch, recalibrated_bam_qualimap_ch
+    set file("recalibrated.bam"), file("recalibrated.bam.bai") into recalibrated_bam_call_ch, recalibrated_bam_second_pass_ch, bam_phase_vcf_ch, bam_phase_bam_ch
 
     script:
     """
@@ -380,6 +376,10 @@ process bqsr_second_pass {
             --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
     """
 }
+
+/*
+Call, annotate, and filter variants.
+*/
 
 // Call variants in sample with HapltypeCaller, yielding a GVCF.
 process call_sample {
@@ -487,7 +487,7 @@ process annotate_effect {
     set file(vcf), file(idx) from filtered_vcf_ch
 
     output:
-    file "effect_annotated.vcf" into effect_annotated_vcf_ch
+    file "effect_annotated.vcf" into variants_phase_ch
     file "snpEff_stats.csv" into snpeff_stats_ch
 
     script:
@@ -502,6 +502,59 @@ process annotate_effect {
     """
 }
 
+/*
+Phase the haplotypes in the VCF using HapCUT2, and then phase the BAM using WhatsHap.
+*/
+
+// Prepare input data for processes.
+variants_phase_ch.join(bam_phase_vcf_ch).into { data_extract_hairs_ch; data_link_fragments_ch; data_phase_vcf_ch }
+
+// Convert BAM file to the compact fragment file format containing only haplotype-relevant information.
+process extract_hairs {
+    input:
+    set file(vcf), file(bam), file(bai) from data_extract_hairs_ch
+
+    output:
+    file "unlinked_fragment" into unlinked_fragments_ch
+
+    script:
+    """
+    extractHAIRS --10X 1 --bam $bam --VCF $vcf --out "unlinked_fragment"
+    """
+}
+
+// Use LinkFragments to link fragments into barcoded molecules.
+process link_fragments {
+    input:
+    set file(vcf), file(bam), file(bai) from data_link_fragments_ch
+    file unlinked_fragments from unlinked_fragments_ch
+
+    output:
+    file "linked_fragments" into linked_fragments_ch
+
+    script:
+    """
+    LinkFragments --bam $bam --VCF $vcf --fragments $unlinked_fragments --out "linked_fragments"
+    """
+}
+
+// Use HAPCUT2 to assemble fragment file into haplotype blocks.
+process phase_vcf {
+    input:
+    set file(vcf), file(bam), file(bai), file(linked_fragments) from data_phase_vcf_ch
+    file linked_fragments from linked_fragments_ch
+
+    output:
+    file "haplotypes" into haplotypes_ch
+    file "haplotypes.phased.VCF" into phased_vcf_ch
+
+    script:
+    """
+    HAPCUT2 --nf 1 --outvcf 1 --fragments $linked_fragments --VCF $vcf --output "haplotypes"
+    """
+}
+
+// Compress and index the phased VCF.
 process zip_and_index_vcf {
     publishDir "$outdir/vcf", mode: 'copy', pattern: '*.vcf.gz', overwrite: true,
         saveAs: { filename -> "${params.sample}.vcf.gz" }
@@ -509,10 +562,10 @@ process zip_and_index_vcf {
         saveAs: { filename -> "${params.sample}.vcf.gz.tbi" }
 
     input:
-    file vcf from effect_annotated_vcf_ch
+    file vcf from phased_vcf_ch
 
     output:
-    set file("variants.vcf.gz"), file("variants.vcf.gz.tbi") into variants_validate_ch, variants_evaluate_ch
+    set file("variants.vcf.gz"), file("variants.vcf.gz.tbi") into variants_phase_bam_ch
 
     script:
     """
@@ -521,6 +574,46 @@ process zip_and_index_vcf {
     """
 }
 
+// Add haplotype information to BAM, tagging each read with a haplotype (when possible), using
+// the haplotype information from the phased VCF.
+process haplotag_bam {
+    input:
+    set file(vcf), file(idx) from variants_phase_bam_ch
+    set file(bam), file(bai) from bam_phase_bam_ch
+
+    output:
+    file "phased.bam" into phased_bam_ch
+
+    script:
+    """
+    whatshap haplotag --ignore-read-groups --reference $reference -o "phased.bam" $vcf $bam
+    """
+}
+
+process index_bam {
+    publishDir "$outdir/bam", mode: 'copy', pattern: '*.bam', overwrite: true,
+        saveAs: { filename -> "${params.sample}.bam" }
+    publishDir "$outdir/bam", mode: 'copy', pattern: '*.bam.bai', overwrite: true,
+        saveAs: { filename -> "${params.sample}.bam.bai" }
+
+    input:
+    file bam from phased_bam_ch
+
+    output:
+    set file("phased.bam"), file("phased.bam.bai") into indexed_phased_bam
+
+    script:
+    """
+    samtools index "phased.bam"
+    """
+}
+
+/*
+Below we perform QC of data.
+*/
+
+// The GATK variant evaluation module counts variants stratified w.r.t. filters, compares
+// overlap with DBSNP, and more.
 process variant_evaluation {
     publishDir "${params.outdir}/vcf", mode: 'copy', overwrite: true
 
@@ -550,11 +643,6 @@ process variant_evaluation {
         --stratification-module Filter
     """
 }
-
-
-/*
-Below we perform QC of data.
-*/
 
 // Run Qualimap for QC metrics of recalibrated BAM.
 process qualimap_analysis {

@@ -4,6 +4,7 @@ name: linkseq
 channels:
   - bioconda
   - conda-forge
+  - defaults
   - AgBiome
 
 dependencies:
@@ -17,6 +18,8 @@ dependencies:
   - r-gplots=3.0.1.1
   - r-ggplot2=3.1.1
   - bxtools=0.1.0
+  - hapcut2=1.2
+  - whatshap=0.18
   - qualimap=2.2.2a
   - multiqc=1.8
   - snpeff=4.3.1t
