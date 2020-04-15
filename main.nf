@@ -507,7 +507,8 @@ Phase the haplotypes in the VCF using HapCUT2, and then phase the BAM using What
 */
 
 // Prepare input data for processes.
-variants_phase_ch.join(bam_phase_vcf_ch).into { data_extract_hairs_ch; data_link_fragments_ch; data_phase_vcf_ch }
+variants_phase_ch.merge(bam_phase_vcf_ch).into { data_extract_hairs_ch; data_link_fragments_ch; data_phase_vcf_ch }
+
 
 // Convert BAM file to the compact fragment file format containing only haplotype-relevant information.
 process extract_hairs {
@@ -534,14 +535,14 @@ process link_fragments {
 
     script:
     """
-    LinkFragments --bam $bam --VCF $vcf --fragments $unlinked_fragments --out "linked_fragments"
+    LinkFragments.py --bam $bam --VCF $vcf --fragments $unlinked_fragments --out "linked_fragments"
     """
 }
 
 // Use HAPCUT2 to assemble fragment file into haplotype blocks.
 process phase_vcf {
     input:
-    set file(vcf), file(bam), file(bai), file(linked_fragments) from data_phase_vcf_ch
+    set file(vcf), file(bam), file(bai) from data_phase_vcf_ch
     file linked_fragments from linked_fragments_ch
 
     output:
@@ -565,7 +566,7 @@ process zip_and_index_vcf {
     file vcf from phased_vcf_ch
 
     output:
-    set file("variants.vcf.gz"), file("variants.vcf.gz.tbi") into variants_phase_bam_ch
+    set file("variants.vcf.gz"), file("variants.vcf.gz.tbi") into variants_phase_bam_ch, variants_evaluate_ch
 
     script:
     """
@@ -590,7 +591,7 @@ process haplotag_bam {
     """
 }
 
-process index_bam {
+process index_phased_bam {
     publishDir "$outdir/bam", mode: 'copy', pattern: '*.bam', overwrite: true,
         saveAs: { filename -> "${params.sample}.bam" }
     publishDir "$outdir/bam", mode: 'copy', pattern: '*.bam.bai', overwrite: true,
@@ -600,7 +601,7 @@ process index_bam {
     file bam from phased_bam_ch
 
     output:
-    set file("phased.bam"), file("phased.bam.bai") into indexed_phased_bam
+    set file("phased.bam"), file("phased.bam.bai") into indexed_phased_bam_qualimap_ch
 
     script:
     """
@@ -649,7 +650,7 @@ process qualimap_analysis {
     publishDir "$outdir/bam", mode: 'copy', overwrite: true
 
     input:
-    set file(bam), file(bai) from recalibrated_bam_qualimap_ch
+    set file(bam), file(bai) from indexed_phased_bam_qualimap_ch
 
     output:
     file "qualimap_results"
