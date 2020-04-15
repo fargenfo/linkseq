@@ -551,26 +551,6 @@ process variant_evaluation {
     """
 }
 
-// Validate the VCF to make sure it is correctly formatted and such. We do this at this point especcially
-// because we just used some non-GATK tools.
-process validate_vcf {
-    publishDir "$outdir/vcf", mode: 'copy', overwrite: true, saveAs: { filename -> "validation.log" }
-
-    input:
-    set file(vcf), file(idx) from variants_validate_ch
-
-    output:
-    file ".command.log" into validation_log_ch
-
-    script:
-    """
-    gatk ValidateVariants \
-        -V $vcf \
-        -R $reference \
-        --dbsnp $dbsnp
-    """
-}
-
 
 /*
 Below we perform QC of data.
