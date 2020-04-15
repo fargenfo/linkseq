@@ -449,7 +449,33 @@ process annotate_rsid {
         -R $reference \
         -V $vcf \
         --dbsnp $dbsnp \
-        -O "rsid_ann.vcf"
+        -O "rsid_ann.vcf" \
+        --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
+    """
+}
+
+// Filter variants, adding various filter tags to the "FILTER" field of the VCF.
+// FIXME: I'm getting warnings that MQRankSum and ReadPosRankSum don't exist.
+process filter_variants {
+    input:
+    set file(vcf), file(idx) from rsid_annotated_vcf_ch
+
+    output:
+    set file("filtered.vcf"), file("filtered.vcf.idx") into filtered_vcf_ch
+
+    script:
+    """
+    gatk VariantFiltration \
+        -V $vcf \
+        -filter "QD < 2.0" --filter-name "QD2" \
+        -filter "QUAL < 30.0" --filter-name "QUAL30" \
+        -filter "SOR > 3.0" --filter-name "SOR3" \
+        -filter "FS > 60.0" --filter-name "FS60" \
+        -filter "MQ < 40.0" --filter-name "MQ40" \
+        -filter "MQRankSum < -12.5" --filter-name "MQRankSum-12.5" \
+        -filter "ReadPosRankSum < -8.0" --filter-name "ReadPosRankSum-8" \
+        -O "filtered.vcf" \
+        --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
     """
 }
 
@@ -458,7 +484,7 @@ process annotate_effect {
     publishDir "$outdir/vcf", pattern: "snpEff_stats.csv", mode: 'copy', overwrite: true
 
     input:
-    set file(vcf), file(idx) from rsid_annotated_vcf_ch
+    set file(vcf), file(idx) from filtered_vcf_ch
 
     output:
     file "effect_annotated.vcf" into effect_annotated_vcf_ch
@@ -505,6 +531,7 @@ process validate_vcf {
 
     output:
     file ".command.log" into validation_log_ch
+    val 'done' into variants_status_ch
 
     script:
     """
@@ -529,7 +556,7 @@ process qualimap_analysis {
 
     output:
     file "qualimap_results"
-    val 'done' into status_ch
+    val 'done' into qualimap_status_ch
 
     script:
     """
@@ -554,7 +581,8 @@ process multiqc {
     publishDir "$outdir/multiqc", mode: 'copy', overwrite: true
 
     input:
-    val status from status_ch
+    val qstatus from qualimap_status_ch
+    val vstatus from variants_status_ch
 
     output:
     file "multiqc_report.html" into multiqc_report_ch
