@@ -414,12 +414,13 @@ process call_sample {
     """
 }
 
+// Genotype the GVCF in the previous process, yielding a VCF.
 process genotyping {
     input:
     set file(gvcf), file(idx) from gvcf_ch
 
     output:
-    set file("genotyped.vcf"), file("genotyped.vcf.idx") into genotyped_ch
+    set file("genotyped.vcf"), file("genotyped.vcf.idx") into genotyped_vcf_ch
 
     script:
     """
@@ -430,6 +431,87 @@ process genotyping {
         -O "genotyped.vcf" \
         --tmp-dir=tmp \
         --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
+    """
+}
+
+// Add rsid from dbSNP
+// NOTE: VariantAnnotator is still in beta (as of 20th of March 2019).
+process annotate_rsid {
+    input:
+    set file(vcf), file(idx) from genotyped_vcf_ch
+
+    output:
+    set file("rsid_ann.vcf"), file("rsid_ann.vcf.idx") into rsid_annotated_vcf_ch
+
+    script:
+    """
+    gatk VariantAnnotator \
+        -R $reference \
+        -V $vcf \
+        --dbsnp $dbsnp \
+        -O "rsid_ann.vcf"
+    """
+}
+
+// Annotate the VCF with effect prediction. Output some summary stats from the effect prediction as well.
+process annotate_effect {
+    publishDir "$outdir/vcf", pattern: "snpEff_stats.csv", mode: 'copy', overwrite: true
+
+    input:
+    set file(vcf), file(idx) from rsid_annotated_vcf_ch
+
+    output:
+    file "effect_annotated.vcf" into effect_annotated_vcf_ch
+    file "snpEff_stats.csv" into snpeff_stats_ch
+
+    script:
+    """
+    snpEff -Xmx${task.memory.toGiga()}g \
+         -i vcf \
+         -o vcf \
+         -csvStats "snpEff_stats.csv" \
+         hg38 \
+         -v \
+         $vcf > "effect_annotated.vcf"
+    """
+}
+
+process zip_and_index_vcf {
+    publishDir "$outdir/vcf", mode: 'copy', pattern: '*.vcf.gz', overwrite: true,
+        saveAs: { filename -> "${params.sample}.vcf.gz" }
+    publishDir "$outdir/vcf", mode: 'copy', pattern: '*.vcf.gz.tbi', overwrite: true,
+        saveAs: { filename -> "${params.sample}.vcf.gz.tbi" }
+
+    input:
+    file vcf from effect_annotated_vcf_ch
+
+    output:
+    set file("variants.vcf.gz"), file("variants.vcf.gz.tbi") into variants_validate_ch
+
+    script:
+    """
+    cat $vcf | bgzip -c > "variants.vcf.gz"
+    tabix "variants.vcf.gz"
+    """
+}
+
+// Validate the VCF to make sure it is correctly formatted and such. We do this at this point especcially
+// because we just used some non-GATK tools.
+process validate_vcf {
+    publishDir "$outdir/vcf", mode: 'copy', overwrite: true, saveAs: { filename -> "validation.log" }
+
+    input:
+    set file(vcf), file(idx) from variants_validate_ch
+
+    output:
+    file ".command.log" into validation_log_ch
+
+    script:
+    """
+    gatk ValidateVariants \
+        -V $vcf \
+        -R $reference \
+        --dbsnp $dbsnp
     """
 }
 
