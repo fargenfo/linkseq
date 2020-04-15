@@ -512,12 +512,42 @@ process zip_and_index_vcf {
     file vcf from effect_annotated_vcf_ch
 
     output:
-    set file("variants.vcf.gz"), file("variants.vcf.gz.tbi") into variants_validate_ch
+    set file("variants.vcf.gz"), file("variants.vcf.gz.tbi") into variants_validate_ch, variants_evaluate_ch
 
     script:
     """
     cat $vcf | bgzip -c > "variants.vcf.gz"
     tabix "variants.vcf.gz"
+    """
+}
+
+process variant_evaluation {
+    publishDir "${params.outdir}/vcf", mode: 'copy', overwrite: true
+
+    input:
+    set file(vcf), file(idx) from variants_evaluate_ch
+
+    output:
+    file "variant_eval.table" into variant_eval_table_ch
+    val 'done' into variants_status_ch
+
+    script:
+    """
+    # VariantEval fails if the output file doesn't already exist. NOTE: this should be fixed in a newer version of GATK, as of the 19th of February 2019.
+    echo -n > "variant_eval.table"
+
+    gatk VariantEval \
+        -R $reference \
+        --eval $vcf \
+        --output "variant_eval.table" \
+        --dbsnp $dbsnp \
+        -L $targets \
+        -no-ev -no-st \
+        --eval-module TiTvVariantEvaluator \
+        --eval-module CountVariants \
+        --eval-module CompOverlap \
+        --eval-module ValidationReport \
+        --stratification-module Filter
     """
 }
 
@@ -531,7 +561,6 @@ process validate_vcf {
 
     output:
     file ".command.log" into validation_log_ch
-    val 'done' into variants_status_ch
 
     script:
     """
