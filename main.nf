@@ -310,24 +310,6 @@ process prepare_bqsr_table {
     """
 }
 
-// Evaluate BQSR.
-process analyze_covariates {
-    publishDir "$outdir/bam/bqsr", mode: 'copy', overwrite: true
-
-    input:
-    file bqsr_table from bqsr_table_analyze_ch
-
-    output:
-    file 'AnalyzeCovariates.pdf' into bqsr_analysis_ch
-
-    script:
-    """
-    gatk AnalyzeCovariates \
-        -bqsr $bqsr_table \
-        -plots 'AnalyzeCovariates.pdf'
-    """
-}
-
 // Apply recalibration to BAM file.
 // NOTE: this BAM will be phased at a later stage.
 process apply_bqsr {
@@ -361,7 +343,7 @@ process bqsr_second_pass {
     set file(bam), file(bai) from recalibrated_bam_second_pass_ch
 
     output:
-    file 'bqsr_second_pass.table'
+    file 'bqsr_second_pass.table' into bqsr_second_pass_table_ch
 
     script:
     """
@@ -374,6 +356,27 @@ process bqsr_second_pass {
             -O 'bqsr_second_pass.table' \
             --tmp-dir=tmp \
             --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
+    """
+}
+
+// Evaluate BAM before and after recalibration, by comparing the BQSR tables of the first and second
+// pass.
+process analyze_covariates {
+    publishDir "$outdir/bam/bqsr", mode: 'copy', overwrite: true
+
+    input:
+    file bqsr_table from bqsr_table_analyze_ch
+    file bqsr_table_second_pass from bqsr_second_pass_table_ch
+
+    output:
+    file 'AnalyzeCovariates.pdf' into bqsr_analysis_ch
+
+    script:
+    """
+    gatk AnalyzeCovariates \
+        -before $bqsr_table \
+        -after $bqsr_table_second_pass \
+        -plots 'AnalyzeCovariates.pdf'
     """
 }
 
