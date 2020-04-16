@@ -18,17 +18,32 @@
 
 This pipeline aligns [linked-reads from 10x Genomics](https://www.10xgenomics.com/linked-reads/) and calls variants with GAKT. Specifically, germline short variant discovery (SNPs and indels) is performed according to [GATK best-practices](https://software.broadinstitute.org/gatk/best-practices/workflow?id=11145).
 
-The pipeline is written in [Nextflow](https://www.nextflow.io/) and contains tree sub-pipelines:
+The pipeline is written in [Nextflow](https://www.nextflow.io/) and contains two sub-pipelines. The steps of these pipelines are summarized below.
 
-* `single_sample.nf `: align reads with [EMA](https://github.com/arshajii/ema/), recalibrate BAM and call variants with GATK
-* `multi_sample.nf`: joint genotyping and variant annotation and fitering.
-* `phase.nf`: phase variants with [HapCUT2](https://github.com/vibansal/HapCUT2)
+* `main.nf `:
+	* Align reads with [EMA](https://github.com/arshajii/ema/), and recalibrate BAM (BQSR)
+	* Call variants with GATK's `HaplotypeCaller`, yielding a GVCF (which can be used in `joint_genotyping.nf`)
+	* Genotype GVCF with GATK's `GenotypeGVCFs`, yielding a single-sample VCF
+	* Annotate variant effect with `SnpEff` and filter variants
+	* Phase VCF with [HapCUT2](https://github.com/vibansal/HapCUT2)
+	* Attach phasing from VCF to BAM using [WhatsHap](https://whatshap.readthedocs.io/en/latest/index.html)
+	* QC of variants with GATK's `VariantEval`
+	* QC of BAM with [Qualimap](http://qualimap.bioinfo.cipf.es/)
+	* QC report using [MultiQC](multiqc.info/)
+* `joint_genotyping.nf`: joint genotyping and variant annotation and fitering.
+	* Joint genotyping of many GVCFs from `main.nf` using GATK's `GenotypeGVCFs`
+	* Variant filtering using VQSR from GATK
+	* Refine genotypes using GATK's `CalculateGenotypePosteriors`
+	* Annotate variant effect with `SnpEff`
+	* QC of variants with GATK's `VariantEval`
+	* QC report using MultiQC
+	* **NOTE:** as of yet, no phasing in this pipeline
 
 ## Workflow
 
 * Basecall and demultiplex raw sequencing data and trim reads with `linkseq-demux` (https://github.com/olavurmortensen/linkseq-demux).
-* For each sample, align reads and call variants with `single_sample.nf`.
-* Perform joint genotyping of all samples with `multi_sample.nf`.
+* For each sample, align reads, call variants, and phase VCF and BAM with `main.nf`.
+* Perform joint genotyping of all samples with `joint_genotyping.nf` (no phasing).
 
 ## Align reads and call variants with `single_sample.nf`
 
