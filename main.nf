@@ -703,11 +703,13 @@ process bx_stats {
 
     output:
     file 'bx_stats.csv'
+    file 'bx_summary.txt'
 
     script:
     """
     echo -e 'BX\tread count\tmedian insert size\tmedian mapq\tmedian AS' > bx_stats.csv
     bxtools stats $bam >> bx_stats.csv
+    bx_summary.py bx_stats.csv > bx_summary.txt
     """
 }
 
