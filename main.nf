@@ -604,7 +604,7 @@ process index_phased_bam {
     file bam from phased_bam_ch
 
     output:
-    set file("phased.bam"), file("phased.bam.bai") into indexed_phased_bam_qualimap_ch
+    set file("phased.bam"), file("phased.bam.bai") into indexed_phased_bam_qualimap_ch, indexed_phased_bam_bx_ch
 
     script:
     """
@@ -691,6 +691,23 @@ process phasing_stats {
     script:
     """
     whatshap stats $vcf --gtf phase_blocks.gtf --tsv phasing_stats.tsv
+    """
+}
+
+// Get basic statistics about linked-read barcodes in the BAM.
+process bx_stats {
+    publishDir "$outdir/bam", mode: 'copy', overwrite: true
+
+    input:
+    set file(bam), file(bai) from indexed_phased_bam_bx_ch
+
+    output:
+    file 'bx_stats.csv'
+
+    script:
+    """
+    echo -e 'BX\tread count\tmedian insert size\tmedian mapq\tmedian AS' > bx_stats.csv
+    bxtools stats $bam >> bx_stats.csv
     """
 }
 
