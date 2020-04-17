@@ -66,10 +66,6 @@ whitelist = file(params.whitelist, checkIfExists: true)
 dbsnp = file(params.dbsnp, checkIfExists: true)
 outdir = file(params.outdir)
 
-// Get lists of the read 1 and 2 FASTQ files.
-fastq_r1_list = file(params.fastq_r1, checkIfExists: true)
-fastq_r2_list = file(params.fastq_r2, checkIfExists: true)
-
 // Get FASTQ paths in channels.
 Channel.fromPath(params.fastq_r1).set { fastq_r1_merge_ch  }
 Channel.fromPath(params.fastq_r2).set { fastq_r2_merge_ch  }
