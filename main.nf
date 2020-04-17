@@ -550,7 +550,7 @@ process phase_vcf {
 
     output:
     file "haplotypes" into haplotypes_ch
-    file "haplotypes.phased.VCF" into phased_vcf_ch
+    file "haplotypes.phased.VCF" into phased_vcf_ch, phased_vcf_qc_ch
 
     script:
     """
@@ -673,6 +673,24 @@ process qualimap_analysis {
         --collect-overlap-pairs \
         -nt ${task.cpus} \
         --java-mem-size=${task.memory.toGiga()}G
+    """
+}
+
+// Get basic statistics about haplotype phasing blocks.
+// NOTE: provide a list of reference chromosome sizes to get N50.
+process phasing_stats {
+    publishDir "$outdir/vcf/phasing", mode: 'copy', overwrite: true
+
+    input:
+    file vcf from phased_vcf_qc_ch
+
+    output:
+    file 'phase_blocks.gtf'
+    file 'phasing_stats.tsv'
+
+    script:
+    """
+    whatshap stats $vcf --gtf phase_blocks.gtf --tsv phasing_stats.tsv
     """
 }
 
