@@ -123,6 +123,9 @@ process check_sync {
     input:
     file fastq from fastq_check_sync_ch
 
+    output:
+    val 'done' into check_sync_status_ch
+
     script:
     """
     reformat.sh in=$fastq vint
@@ -133,6 +136,7 @@ process check_sync {
 process bc_count {
     input:
     file fastq from fastq_count_ch
+    val status from check_sync_status_ch
 
     output:
     set file('*.ema-fcnt'), file('*.ema-ncnt') into bc_count_ch
