@@ -730,7 +730,6 @@ process bx_stats {
     """
 }
 
-// FIXME: it seems like this process is imported as cached even though the qualimap process is not.
 // This means that the multiqc output folder is not updated.
 process multiqc {
     publishDir "$outdir/multiqc", mode: 'copy', overwrite: true
