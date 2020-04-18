@@ -66,8 +66,16 @@ outdir = file(params.outdir)
 Channel.fromPath(params.fastq_csv)
     .splitCsv(header:true)
     .map{ row-> tuple(row.sample, file(row.read1), file(row.read2)) }
-    .set { fastq_ch }
+    .into { fastq_ch; fastq_print_ch }
 
+println 'Sample ID\tFASTQ read 1 files\tFASTQ read 2 files'
+fastq_print_ch.subscribe onNext: { row ->
+    sample = row[0]
+    read1 = row[1].name.join(',')
+    read2 = row[2].name.join(',')
+    println sample + "\t"  + read1 + "\t" + read2
+    }, onComplete: {
+    println '==================================' }
 
 /*
 First, we align the data to reference with EMA. In order to do so, we need to do some pre-processing, including,
@@ -102,7 +110,7 @@ process merge_lanes {
 // Interleave reads 1 and 2.
 process interleave_fastq {
     input:
-    set sample, file(read1), file(read2) into merged_fastq_ch
+    set sample, file(read1), file(read2) from merged_fastq_ch
 
     output:
     set sample, file('interleaved.fastq.gz') into fastq_count_ch, fastq_preproc_ch, fastq_readgroup_ch, fastq_check_sync_ch
@@ -209,7 +217,7 @@ readgroup_bwa_ch.join(nobc_bin_bwa_ch).set{data_bwa_ch}
 // Align the no-barcode bin. These reads had barcodes that didn't match the whitelist.
 process map_nobc {
     input:
-    set rg, file(nobc_bin) from data_bwa_ch
+    set sample, rg, file(nobc_bin) from data_bwa_ch
 
     output:
     set sample, file("nobc.bam") into nobc_bam_ch
@@ -221,9 +229,6 @@ process map_nobc {
     """
 }
 
-// Combine BAMs from EMA and BWA into a single channel for merging.
-//aligned_bam_merge_ch = ema_bam_ch.concat(nobc_bam_ch)
-
 // Group EMA bin BAMs by key, such that we have (sample, BAM list) tuples.
 ema_bam_ch.groupTuple().set{ema_bam_grouped_ch}
 // Combine this with the no-barcode bin, yielding a (sample, no-bc BAM, EMA bin BAM list) tuples.
@@ -233,7 +238,6 @@ nobc_bam_ch.join(ema_bam_grouped_ch).set{data_merge_bams_ch}
 // All BAMs have the same readgroup, so the RG and PG headers wil be combined.
 process merge_bams {
     input:
-    file bams from aligned_bam_merge_ch.collect()
     set sample, nobc_bam, ema_bams from data_merge_bams_ch
 
     output:
@@ -594,7 +598,7 @@ variants_phase_bam_ch.join(bam_phase_bam_ch).set{data_haplotag_bam_ch}
 // the haplotype information from the phased VCF.
 process haplotag_bam {
     input:
-    set file(vcf), file(idx), file(bam), file(bai) from data_haplotag_bam_ch
+    set sample, file(vcf), file(idx), file(bam), file(bai) from data_haplotag_bam_ch
 
     output:
     set sample, file("phased.bam") into phased_bam_ch
