@@ -303,7 +303,8 @@ BQSR: https://software.broadinstitute.org/gatk/documentation/article?id=44
 
 // Generate recalibration table for BQSR.
 process prepare_bqsr_table {
-    publishDir "$outdir/$sample/bam/bqsr", mode: 'copy', overwrite: true
+    publishDir "$outdir/multiqc_logs/bqsr_before", mode: 'copy', overwrite: true,
+        saveAs: { filename -> "$sample" }
 
     input:
     set sample, file(bam), file(bai) from indexed_bam_prepare_ch
@@ -353,7 +354,8 @@ process apply_bqsr {
 
 // Second pass of BQSR, giving a "before and after" picture of BQSR.
 process bqsr_second_pass {
-    publishDir "$outdir/$sample/bam/bqsr", mode: 'copy', overwrite: true
+    publishDir "$outdir/multiqc_logs/bqsr_after", mode: 'copy', overwrite: true,
+        saveAs: { filename -> "$sample" }
 
     input:
     set sample, file(bam), file(bai) from recalibrated_bam_second_pass_ch
@@ -380,7 +382,8 @@ bqsr_table_analyze_ch.join(bqsr_second_pass_table_ch).set{data_analyze_covariate
 // Evaluate BAM before and after recalibration, by comparing the BQSR tables of the first and second
 // pass.
 process analyze_covariates {
-    publishDir "$outdir/$sample/bam/bqsr", mode: 'copy', overwrite: true
+    publishDir "$outdir/multiqc_logs/AnalyzeCovariates", mode: 'copy', overwrite: true,
+        saveAs: { filename -> "$sample" }
 
     input:
     set sample, file(bqsr_table), file(bqsr_table_second_pass) from data_analyze_covariates_ch
@@ -501,7 +504,8 @@ process filter_variants {
 
 // Annotate the VCF with effect prediction. Output some summary stats from the effect prediction as well.
 process annotate_effect {
-    publishDir "$outdir/$sample/vcf", pattern: "snpEff_stats.csv", mode: 'copy', overwrite: true
+    publishDir "$outdir/multiqc_logs/SnpEff", pattern: "snpEff_stats.csv", mode: 'copy', overwrite: true,
+        saveAs: { filename -> "$sample" }
 
     input:
     set sample, file(vcf), file(idx) from filtered_vcf_ch
@@ -634,7 +638,8 @@ Below we perform QC of data.
 // The GATK variant evaluation module counts variants stratified w.r.t. filters, compares
 // overlap with DBSNP, and more.
 process variant_evaluation {
-    publishDir "$outdir/$sample/vcf", mode: 'copy', overwrite: true
+    publishDir "$outdir/multiqc_logs/VariantEval", mode: 'copy', overwrite: true,
+        saveAs: { filename -> "$sample" }
 
     input:
     set sample, file(vcf), file(idx) from variants_evaluate_ch
@@ -665,7 +670,8 @@ process variant_evaluation {
 
 // Run Qualimap for QC metrics of recalibrated BAM.
 process qualimap_analysis {
-    publishDir "$outdir/$sample/bam", mode: 'copy', overwrite: true
+    publishDir "$outdir/multiqc_logs/qualimap", mode: 'copy', overwrite: true,
+        saveAs: { filename -> "$sample" }
 
     input:
     set sample, file(bam), file(bai) from indexed_phased_bam_qualimap_ch
@@ -696,7 +702,9 @@ process qualimap_analysis {
 // NOTE: this does not produce a MultiQC report, and neither does bx_stats. If I do implement
 // that, there must be a status value emitted from these, to create dependency.
 process phasing_stats {
-    publishDir "$outdir/$sample/vcf/phasing", mode: 'copy', overwrite: true
+    publishDir "$outdir/$sample/vcf/phasing/", pattern: "*.gtf", mode: 'copy', overwrite: true
+    publishDir "$outdir/multiqc_logs/WhatsHap", pattern: "*.tsv", mode: 'copy', overwrite: true,
+        saveAs: { filename -> "$sample" }
 
     input:
     set sample, file(vcf), file(idx) from variants_phasing_stats_ch
@@ -712,8 +720,12 @@ process phasing_stats {
 }
 
 // Get basic statistics about linked-read barcodes in the BAM.
+// NOTE: this does not produce a MultiQC report. If I do implement
+// that, there must be a status value emitted from these, to create dependency.
 process bx_stats {
-    publishDir "$outdir/$sample/bam", mode: 'copy', overwrite: true
+    publishDir "$outdir/$sample/bam", pattern: "*.csv", mode: 'copy', overwrite: true
+    publishDir "$outdir/multiqc_logs/bx_stats", pattern: ".txt", mode: 'copy', overwrite: true,
+        saveAs: { filename -> "$sample" }
 
     input:
     set sample, file(bam), file(bai) from indexed_phased_bam_bx_ch
@@ -730,6 +742,8 @@ process bx_stats {
     """
 }
 
+// FIXME: get sample names into MuliQC. At the moment, the report calls the samples things like "qualimap_results" and "SnpEff_stats".
+// FIXME: use ".collect()" so that MultiQC is only run once, when all samples are finished.
 // This means that the multiqc output folder is not updated.
 process multiqc {
     publishDir "$outdir/multiqc", mode: 'copy', overwrite: true
@@ -744,7 +758,7 @@ process multiqc {
 
     script:
     """
-    multiqc -f $outdir
+    multiqc -f $outdir/multiqc_logs
     """
 }
 
