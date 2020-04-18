@@ -7,13 +7,13 @@ Author: Ólavur Mortensen <olavur@fargen.fo>
 /*
 TODO:
 
+If one sample fails, and I remove it from the CSV, is Nextflow able to get the other runned samples from
+the cache? Or will all samples run from the start?
 
 */
 
 // Input parameters.
-params.fastq_r1 = null
-params.fastq_r2 = null
-params.sample = null
+params.fastq_csv = null
 params.reference = null
 params.targets = null
 params.whitelist = null
@@ -36,9 +36,7 @@ if (params.help){
 }
 
 // Make sure necessary input parameters are assigned.
-assert params.fastq_r1 != null, 'Input parameter "fastq_r1" cannot be unasigned.'
-assert params.fastq_r2 != null, 'Input parameter "fastq_r2" cannot be unasigned.'
-assert params.sample != null, 'Input parameter "sample" cannot be unasigned.'
+assert params.fastq_csv != null, 'Input parameter "fastq_csv" cannot be unasigned.'
 assert params.reference != null, 'Input parameter "reference" cannot be unasigned.'
 assert params.targets != null, 'Input parameter "targets" cannot be unasigned.'
 assert params.whitelist != null, 'Input parameter "whitelist" cannot be unasigned.'
@@ -48,9 +46,7 @@ assert params.outdir != null, 'Input parameter "outdir" cannot be unasigned.'
 
 println "P I P E L I N E     I P U T S    "
 println "================================="
-println "fastq_r1           : ${params.fastq_r1}"
-println "fastq_r2           : ${params.fastq_r2}"
-println "sample             : ${params.sample}"
+println "fastq_csv          : ${params.fastq_csv}"
 println "reference          : ${params.reference}"
 println "targets            : ${params.targets}"
 println "whitelist          : ${params.whitelist}"
@@ -66,9 +62,12 @@ whitelist = file(params.whitelist, checkIfExists: true)
 dbsnp = file(params.dbsnp, checkIfExists: true)
 outdir = file(params.outdir)
 
-// Get FASTQ paths in channels.
-Channel.fromPath(params.fastq_r1).set { fastq_r1_merge_ch  }
-Channel.fromPath(params.fastq_r2).set { fastq_r2_merge_ch  }
+// Read FASTQ read 1 and 2, as well as sample IDs, from input CSV file.
+Channel.fromPath(params.fastq_csv)
+    .splitCsv(header:true)
+    .map{ row-> tuple(row.sample, file(row.read1), file(row.read2)) }
+    .set { fastq_ch }
+
 
 /*
 First, we align the data to reference with EMA. In order to do so, we need to do some pre-processing, including,
@@ -79,37 +78,38 @@ but not limited to, merging lanes, counting barcodes, and binning reads.
 // If there is only one lane, all this process does is decompress the files.
 process merge_lanes {
     input:
-    file r1 from fastq_r1_merge_ch.toSortedList()
-    file r2 from fastq_r2_merge_ch.toSortedList()
+    set sample, file(read1), file(read2) from fastq_ch
 
     output:
-    file 'R1.fastq.gz' into merged_fastq_r1_ch
-    file 'R2.fastq.gz' into merged_fastq_r2_ch
+    set sample, file('R1.fastq.gz'), file('R2.fastq.gz') into merged_fastq_ch
 
     script:
-    // Sort the FASTQ lists so that they are concatenated in the same order.
-    if(r1 instanceof List) {
-        r1 = r1.join(' ')
-        r2 = r2.join(' ')
+    // If there are multiple input FASTQs, sort the list of FASTQ by file name, so that they are
+    // concatenated in the same order. Join the names in a single string also.
+    if(read1 instanceof List) {
+        read1 = read1.sort{ it.name }
+        read2 = read2.sort{ it.name }
+        read1 = read1.join(' ')
+        read2 = read2.join(' ')
     }
+    script:
     """
-    zcat $r1 | gzip -c > 'R1.fastq.gz'
-    zcat $r2 | gzip -c > 'R2.fastq.gz'
+    zcat $read1 | gzip -c > 'R1.fastq.gz'
+    zcat $read2 | gzip -c > 'R2.fastq.gz'
     """
 }
 
 // Interleave reads 1 and 2.
 process interleave_fastq {
     input:
-    file r1 from merged_fastq_r1_ch
-    file r2 from merged_fastq_r2_ch
+    set sample, file(read1), file(read2) into merged_fastq_ch
 
     output:
-    file 'interleaved.fastq.gz' into fastq_count_ch, fastq_preproc_ch, fastq_readgroup_ch, fastq_check_sync_ch
+    set sample, file('interleaved.fastq.gz') into fastq_count_ch, fastq_preproc_ch, fastq_readgroup_ch, fastq_check_sync_ch
 
     script:
     """
-    reformat.sh in=$r1 in2=$r2 out=interleaved.fastq.gz
+    reformat.sh in=$read1 in2=$read2 out=interleaved.fastq.gz
     """
 }
 
@@ -117,10 +117,10 @@ process interleave_fastq {
 // will see that the reads are out of sync and throw an error.
 process check_sync {
     input:
-    file fastq from fastq_check_sync_ch
+    set sample, file(fastq) from fastq_check_sync_ch
 
     output:
-    val 'done' into check_sync_status_ch
+    set sample, val('done') into check_sync_status_ch
 
     script:
     """
@@ -128,20 +128,23 @@ process check_sync {
     """
 }
 
+fastq_count_ch.join(check_sync_status_ch).set{data_bc_count_ch}
+
 // Count barcodes in FASTQ.
 process bc_count {
     input:
-    file fastq from fastq_count_ch
-    val status from check_sync_status_ch
+    set sample, file(fastq), status from data_bc_count_ch
 
     output:
-    set file('*.ema-fcnt'), file('*.ema-ncnt') into bc_count_ch
+    set sample, file('*.ema-fcnt'), file('*.ema-ncnt') into bc_count_ch
 
     script:
     """
     zcat $fastq | ema count -w $whitelist -o bc_count
     """
 }
+
+fastq_preproc_ch.join(bc_count_ch).set{data_preproc_ch}
 
 // Statistical binning of reads, splitting the reads into bins.
 // TODO:
@@ -151,12 +154,11 @@ process bc_count {
 // Barcode correction report?
 process preproc {
     input:
-    file fastq from fastq_preproc_ch
-    set file(fcnt), file(ncnt) from bc_count_ch
+    set sample, file(fastq), file(fcnt), file(ncnt) from data_preproc_ch
 
     output:
-    file "preproc_dir/ema-bin-*" into bins_ema_ch mode flatten
-    file "preproc_dir/ema-nobc" into nobc_bin_bwa_ch
+    set sample, file("preproc_dir/ema-bin-*") into bins_ema_ch mode flatten
+    set sample, file("preproc_dir/ema-nobc") into nobc_bin_bwa_ch
 
     script:
     """
@@ -167,31 +169,33 @@ process preproc {
 // Construct a readgroup from the sequence identifier in one of the input FASTQ files.
 process get_readgroup {
     input:
-    file fastq from fastq_readgroup_ch
+    set sample, file(fastq) from fastq_readgroup_ch
 
     output:
-    stdout readgroup_ch
+    set val(sample), stdout into readgroup_ema_ch, readgroup_bwa_ch
 
     script:
     """
-    get_readgroups.py $fastq $params.sample
+    get_readgroups.py $fastq $sample
     """
 }
 
-// Duplicate the readgroup channel.
-readgroup_ch.into { readgroup_ema_ch; readgroup_bwa_ch }
-
 // Combine the readgroup channel with the EMA bins channel so that each instance of the ema_align process gets
 // a readgroup object.
-bins_ema_ch = readgroup_ema_ch.combine(bins_ema_ch)
+// First combine all (sample, rg) pairs with all (sample, bin) pairs.
+readgroup_ema_ch.combine(bins_ema_ch).set{data_ema_ch}
+// Filter out all pairs where the sample ID doesn't match.
+data_ema_ch.filter { it[0] == it[2] }.set{data_ema_ch}
+// Map from (sample, rg, sample, bin) to (sample, rg, bin).
+data_ema_ch.map { tuple(it[0], it[1], it[3]) }.set{data_ema_ch}
 
 // Align reads from each bin with EMA.
 process ema_align {
     input:
-    set rg, file(bin) from bins_ema_ch
+    set sample, rg, file(bin) from data_ema_ch
 
     output:
-    file "${bin}.bam" into ema_bam_ch
+    set sample, file("${bin}.bam") into ema_bam_ch
 
     script:
     """
@@ -200,14 +204,15 @@ process ema_align {
     """
 }
 
+readgroup_bwa_ch.join(nobc_bin_bwa_ch).set{data_bwa_ch}
+
 // Align the no-barcode bin. These reads had barcodes that didn't match the whitelist.
 process map_nobc {
     input:
-    file nobc_bin from nobc_bin_bwa_ch
-    val rg from readgroup_bwa_ch
+    set rg, file(nobc_bin) from data_bwa_ch
 
     output:
-    file "nobc.bam" into nobc_bam_ch
+    set sample, file("nobc.bam") into nobc_bam_ch
 
     script:
     """
@@ -217,31 +222,37 @@ process map_nobc {
 }
 
 // Combine BAMs from EMA and BWA into a single channel for merging.
-aligned_bam_merge_ch = ema_bam_ch.concat(nobc_bam_ch)
+//aligned_bam_merge_ch = ema_bam_ch.concat(nobc_bam_ch)
+
+// Group EMA bin BAMs by key, such that we have (sample, BAM list) tuples.
+ema_bam_ch.groupTuple().set{ema_bam_grouped_ch}
+// Combine this with the no-barcode bin, yielding a (sample, no-bc BAM, EMA bin BAM list) tuples.
+nobc_bam_ch.join(ema_bam_grouped_ch).set{data_merge_bams_ch}
 
 // Merge BAMs from both EMA and BWA.
 // All BAMs have the same readgroup, so the RG and PG headers wil be combined.
 process merge_bams {
     input:
     file bams from aligned_bam_merge_ch.collect()
+    set sample, nobc_bam, ema_bams from data_merge_bams_ch
 
     output:
-    file "merged.bam" into merged_bam_sort_ch
+    set sample, file("merged.bam") into merged_bam_sort_ch
 
     script:
-    bam_list = (bams as List).join(' ')
+    ema_bam_list = (ema_bams as List).join(' ')
     """
-    samtools merge -@ ${task.cpus} -O bam -l 0 -c -p "merged.bam" $bam_list
+    samtools merge -@ ${task.cpus} -O bam -l 0 -c -p "merged.bam" $nobc_bam $ema_bam_list
     """
 }
 
 // Coordinate sort BAM.
 process sort_bam {
     input:
-    file bam from merged_bam_sort_ch
+    set sample, file(bam) from merged_bam_sort_ch
 
     output:
-    file "sorted.bam" into sorted_bam_markdup_ch
+    set sample, file("sorted.bam") into sorted_bam_markdup_ch
 
     script:
     """
@@ -255,10 +266,10 @@ process sort_bam {
 // --BARCODE_TAG:String          Barcode SAM tag (ex. BC for 10X Genomics)  Default value: null.                          
 process mark_dup {
     input:
-    file bam from sorted_bam_markdup_ch
+    set sample, file(bam) from sorted_bam_markdup_ch
 
     output:
-    file "marked_dup.bam" into marked_bam_index_ch
+    set sample, file("marked_dup.bam") into marked_bam_index_ch
 
     script:
     """
@@ -269,10 +280,10 @@ process mark_dup {
 // Index the BAM.
 process index_bam {
     input:
-    file bam from marked_bam_index_ch
+    set sample, file(bam) from marked_bam_index_ch
 
     output:
-    set file("$bam"), file("${bam}.bai") into indexed_bam_prepare_ch, indexed_bam_apply_ch
+    set sample, file("$bam"), file("${bam}.bai") into indexed_bam_prepare_ch, indexed_bam_apply_ch
 
     script:
     """
@@ -288,13 +299,13 @@ BQSR: https://software.broadinstitute.org/gatk/documentation/article?id=44
 
 // Generate recalibration table for BQSR.
 process prepare_bqsr_table {
-    publishDir "$outdir/bam/bqsr", mode: 'copy', overwrite: true
+    publishDir "$outdir/$sample/bam/bqsr", mode: 'copy', overwrite: true
 
     input:
-    set file(bam), file(bai) from indexed_bam_prepare_ch
+    set sample, file(bam), file(bai) from indexed_bam_prepare_ch
 
     output:
-    file 'bqsr.table' into bqsr_table_analyze_ch, bqsr_table_apply_ch
+    set sample, file('bqsr.table') into bqsr_table_analyze_ch, bqsr_table_apply_ch
 
     script:
     """
@@ -310,15 +321,16 @@ process prepare_bqsr_table {
     """
 }
 
+indexed_bam_apply_ch.join(bqsr_table_apply_ch).set{data_apply_ch}
+
 // Apply recalibration to BAM file.
 // NOTE: this BAM will be phased at a later stage.
 process apply_bqsr {
     input:
-    set file(bam), file(bai) from indexed_bam_apply_ch
-    file bqsr_table from bqsr_table_apply_ch
+    set sample, file(bam), file(bai), bqsr_table from data_apply_ch
 
     output:
-    set file("recalibrated.bam"), file("recalibrated.bam.bai") into recalibrated_bam_call_ch, recalibrated_bam_second_pass_ch, bam_phase_vcf_ch, bam_phase_bam_ch
+    set sample, file("recalibrated.bam"), file("recalibrated.bam.bai") into recalibrated_bam_call_ch, recalibrated_bam_second_pass_ch, bam_phase_vcf_ch, bam_phase_bam_ch
 
     script:
     """
@@ -337,13 +349,13 @@ process apply_bqsr {
 
 // Second pass of BQSR, giving a "before and after" picture of BQSR.
 process bqsr_second_pass {
-    publishDir "$outdir/bam/bqsr", mode: 'copy', overwrite: true
+    publishDir "$outdir/$sample/bam/bqsr", mode: 'copy', overwrite: true
 
     input:
-    set file(bam), file(bai) from recalibrated_bam_second_pass_ch
+    set sample, file(bam), file(bai) from recalibrated_bam_second_pass_ch
 
     output:
-    file 'bqsr_second_pass.table' into bqsr_second_pass_table_ch
+    set sample, file('bqsr_second_pass.table') into bqsr_second_pass_table_ch
 
     script:
     """
@@ -359,17 +371,18 @@ process bqsr_second_pass {
     """
 }
 
+bqsr_table_analyze_ch.join(bqsr_second_pass_table_ch).set{data_analyze_covariates_ch}
+
 // Evaluate BAM before and after recalibration, by comparing the BQSR tables of the first and second
 // pass.
 process analyze_covariates {
-    publishDir "$outdir/bam/bqsr", mode: 'copy', overwrite: true
+    publishDir "$outdir/$sample/bam/bqsr", mode: 'copy', overwrite: true
 
     input:
-    file bqsr_table from bqsr_table_analyze_ch
-    file bqsr_table_second_pass from bqsr_second_pass_table_ch
+    set sample, file(bqsr_table), file(bqsr_table_second_pass) from data_analyze_covariates_ch
 
     output:
-    file 'AnalyzeCovariates.pdf' into bqsr_analysis_ch
+    file 'AnalyzeCovariates.pdf'
 
     script:
     """
@@ -386,13 +399,13 @@ Call, annotate, and filter variants.
 
 // Call variants in sample with HapltypeCaller, yielding a GVCF.
 process call_sample {
-    publishDir "$outdir/gvcf", mode: 'copy', overwrite: true
+    publishDir "$outdir/$sample/gvcf", mode: 'copy', overwrite: true
 
     input:
-    set file(bam), file(bai) from recalibrated_bam_call_ch
+    set sample, file(bam), file(bai) from recalibrated_bam_call_ch
 
     output:
-    set file("gvcf.g.vcf"), file("gvcf.g.vcf.idx") into gvcf_ch
+    set sample, file("gvcf.g.vcf"), file("gvcf.g.vcf.idx") into gvcf_ch
 
     script:
     """
@@ -420,10 +433,10 @@ process call_sample {
 // Genotype the GVCF in the previous process, yielding a VCF.
 process genotyping {
     input:
-    set file(gvcf), file(idx) from gvcf_ch
+    set sample, file(gvcf), file(idx) from gvcf_ch
 
     output:
-    set file("genotyped.vcf"), file("genotyped.vcf.idx") into genotyped_vcf_ch
+    set sample, file("genotyped.vcf"), file("genotyped.vcf.idx") into genotyped_vcf_ch
 
     script:
     """
@@ -441,10 +454,10 @@ process genotyping {
 // NOTE: VariantAnnotator is still in beta (as of 20th of March 2019).
 process annotate_rsid {
     input:
-    set file(vcf), file(idx) from genotyped_vcf_ch
+    set sample, file(vcf), file(idx) from genotyped_vcf_ch
 
     output:
-    set file("rsid_ann.vcf"), file("rsid_ann.vcf.idx") into rsid_annotated_vcf_ch
+    set sample, file("rsid_ann.vcf"), file("rsid_ann.vcf.idx") into rsid_annotated_vcf_ch
 
     script:
     """
@@ -461,10 +474,10 @@ process annotate_rsid {
 // FIXME: I'm getting warnings that MQRankSum and ReadPosRankSum don't exist.
 process filter_variants {
     input:
-    set file(vcf), file(idx) from rsid_annotated_vcf_ch
+    set sample, file(vcf), file(idx) from rsid_annotated_vcf_ch
 
     output:
-    set file("filtered.vcf"), file("filtered.vcf.idx") into filtered_vcf_ch
+    set sample, file("filtered.vcf"), file("filtered.vcf.idx") into filtered_vcf_ch
 
     script:
     """
@@ -484,14 +497,14 @@ process filter_variants {
 
 // Annotate the VCF with effect prediction. Output some summary stats from the effect prediction as well.
 process annotate_effect {
-    publishDir "$outdir/vcf", pattern: "snpEff_stats.csv", mode: 'copy', overwrite: true
+    publishDir "$outdir/$sample/vcf", pattern: "snpEff_stats.csv", mode: 'copy', overwrite: true
 
     input:
-    set file(vcf), file(idx) from filtered_vcf_ch
+    set sample, file(vcf), file(idx) from filtered_vcf_ch
 
     output:
-    file "effect_annotated.vcf" into variants_phase_ch
-    file "snpEff_stats.csv" into snpeff_stats_ch
+    set sample, file("effect_annotated.vcf") into variants_phase_ch
+    file "snpEff_stats.csv"
 
     script:
     """
@@ -510,16 +523,16 @@ Phase the haplotypes in the VCF using HapCUT2, and then phase the BAM using What
 */
 
 // Prepare input data for processes.
-variants_phase_ch.merge(bam_phase_vcf_ch).into { data_extract_hairs_ch; data_link_fragments_ch; data_phase_vcf_ch }
+variants_phase_ch.join(bam_phase_vcf_ch).set { data_extract_hairs_ch }
 
 
 // Convert BAM file to the compact fragment file format containing only haplotype-relevant information.
 process extract_hairs {
     input:
-    set file(vcf), file(bam), file(bai) from data_extract_hairs_ch
+    set sample, file(vcf), file(bam), file(bai) from data_extract_hairs_ch
 
     output:
-    file "unlinked_fragment" into unlinked_fragments_ch
+    set sample, file(vcf), file(bam), file(bai), file("unlinked_fragment") into data_link_fragments_ch
 
     script:
     """
@@ -530,11 +543,10 @@ process extract_hairs {
 // Use LinkFragments to link fragments into barcoded molecules.
 process link_fragments {
     input:
-    set file(vcf), file(bam), file(bai) from data_link_fragments_ch
-    file unlinked_fragments from unlinked_fragments_ch
+    set sample, file(vcf), file(bam), file(bai), file(unlinked_fragments) from data_link_fragments_ch
 
     output:
-    file "linked_fragments" into linked_fragments_ch
+    set sample, file(vcf), file(bam), file(bai), file('linked_fragments') into data_phase_vcf_ch
 
     script:
     """
@@ -545,12 +557,10 @@ process link_fragments {
 // Use HAPCUT2 to assemble fragment file into haplotype blocks.
 process phase_vcf {
     input:
-    set file(vcf), file(bam), file(bai) from data_phase_vcf_ch
-    file linked_fragments from linked_fragments_ch
+    set sample, file(vcf), file(bam), file(bai), file(linked_fragments) from data_phase_vcf_ch
 
     output:
-    file "haplotypes" into haplotypes_ch
-    file "haplotypes.phased.VCF" into phased_vcf_ch, phased_vcf_qc_ch
+    set sample, file("haplotypes.phased.VCF") into phased_vcf_ch
 
     script:
     """
@@ -560,16 +570,16 @@ process phase_vcf {
 
 // Compress and index the phased VCF.
 process zip_and_index_vcf {
-    publishDir "$outdir/vcf", mode: 'copy', pattern: '*.vcf.gz', overwrite: true,
-        saveAs: { filename -> "${params.sample}.vcf.gz" }
-    publishDir "$outdir/vcf", mode: 'copy', pattern: '*.vcf.gz.tbi', overwrite: true,
-        saveAs: { filename -> "${params.sample}.vcf.gz.tbi" }
+    publishDir "$outdir/$sample/vcf", mode: 'copy', pattern: '*.vcf.gz', overwrite: true,
+        saveAs: { filename -> "${sample}.vcf.gz" }
+    publishDir "$outdir/$sample/vcf", mode: 'copy', pattern: '*.vcf.gz.tbi', overwrite: true,
+        saveAs: { filename -> "${sample}.vcf.gz.tbi" }
 
     input:
-    file vcf from phased_vcf_ch
+    set sample, file(vcf) from phased_vcf_ch
 
     output:
-    set file("variants.vcf.gz"), file("variants.vcf.gz.tbi") into variants_phase_bam_ch, variants_evaluate_ch
+    set sample, file("variants.vcf.gz"), file("variants.vcf.gz.tbi") into variants_phase_bam_ch, variants_evaluate_ch, variants_phasing_stats_ch
 
     script:
     """
@@ -578,15 +588,16 @@ process zip_and_index_vcf {
     """
 }
 
+variants_phase_bam_ch.join(bam_phase_bam_ch).set{data_haplotag_bam_ch}
+
 // Add haplotype information to BAM, tagging each read with a haplotype (when possible), using
 // the haplotype information from the phased VCF.
 process haplotag_bam {
     input:
-    set file(vcf), file(idx) from variants_phase_bam_ch
-    set file(bam), file(bai) from bam_phase_bam_ch
+    set file(vcf), file(idx), file(bam), file(bai) from data_haplotag_bam_ch
 
     output:
-    file "phased.bam" into phased_bam_ch
+    set sample, file("phased.bam") into phased_bam_ch
 
     script:
     """
@@ -595,16 +606,16 @@ process haplotag_bam {
 }
 
 process index_phased_bam {
-    publishDir "$outdir/bam", mode: 'copy', pattern: '*.bam', overwrite: true,
-        saveAs: { filename -> "${params.sample}.bam" }
-    publishDir "$outdir/bam", mode: 'copy', pattern: '*.bam.bai', overwrite: true,
-        saveAs: { filename -> "${params.sample}.bam.bai" }
+    publishDir "$outdir/$sample/bam", mode: 'copy', pattern: '*.bam', overwrite: true,
+        saveAs: { filename -> "${sample}.bam" }
+    publishDir "$outdir/$sample/bam", mode: 'copy', pattern: '*.bam.bai', overwrite: true,
+        saveAs: { filename -> "${sample}.bam.bai" }
 
     input:
-    file bam from phased_bam_ch
+    set sample, file(bam) from phased_bam_ch
 
     output:
-    set file("phased.bam"), file("phased.bam.bai") into indexed_phased_bam_qualimap_ch, indexed_phased_bam_bx_ch
+    set sample, file("phased.bam"), file("phased.bam.bai") into indexed_phased_bam_qualimap_ch, indexed_phased_bam_bx_ch
 
     script:
     """
@@ -619,14 +630,14 @@ Below we perform QC of data.
 // The GATK variant evaluation module counts variants stratified w.r.t. filters, compares
 // overlap with DBSNP, and more.
 process variant_evaluation {
-    publishDir "${params.outdir}/vcf", mode: 'copy', overwrite: true
+    publishDir "$outdir/$sample/vcf", mode: 'copy', overwrite: true
 
     input:
-    set file(vcf), file(idx) from variants_evaluate_ch
+    set sample, file(vcf), file(idx) from variants_evaluate_ch
 
     output:
-    file "variant_eval.table" into variant_eval_table_ch
-    val 'done' into variants_status_ch
+    file "variant_eval.table"
+    set sample, val('done') into variants_status_ch
 
     script:
     """
@@ -650,14 +661,14 @@ process variant_evaluation {
 
 // Run Qualimap for QC metrics of recalibrated BAM.
 process qualimap_analysis {
-    publishDir "$outdir/bam", mode: 'copy', overwrite: true
+    publishDir "$outdir/$sample/bam", mode: 'copy', overwrite: true
 
     input:
-    set file(bam), file(bai) from indexed_phased_bam_qualimap_ch
+    set sample, file(bam), file(bai) from indexed_phased_bam_qualimap_ch
 
     output:
     file "qualimap_results"
-    val 'done' into qualimap_status_ch
+    set sample, val('done') into qualimap_status_ch
 
     script:
     """
@@ -678,11 +689,13 @@ process qualimap_analysis {
 
 // Get basic statistics about haplotype phasing blocks.
 // NOTE: provide a list of reference chromosome sizes to get N50.
+// NOTE: this does not produce a MultiQC report, and neither does bx_stats. If I do implement
+// that, there must be a status value emitted from these, to create dependency.
 process phasing_stats {
-    publishDir "$outdir/vcf/phasing", mode: 'copy', overwrite: true
+    publishDir "$outdir/$sample/vcf/phasing", mode: 'copy', overwrite: true
 
     input:
-    file vcf from phased_vcf_qc_ch
+    set sample, file(vcf), file(idx) from variants_phasing_stats_ch
 
     output:
     file 'phase_blocks.gtf'
@@ -696,10 +709,10 @@ process phasing_stats {
 
 // Get basic statistics about linked-read barcodes in the BAM.
 process bx_stats {
-    publishDir "$outdir/bam", mode: 'copy', overwrite: true
+    publishDir "$outdir/$sample/bam", mode: 'copy', overwrite: true
 
     input:
-    set file(bam), file(bai) from indexed_phased_bam_bx_ch
+    set sample, file(bam), file(bai) from indexed_phased_bam_bx_ch
 
     output:
     file 'bx_stats.csv'
