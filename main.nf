@@ -190,12 +190,12 @@ process get_readgroup {
 
 // Combine the readgroup channel with the EMA bins channel so that each instance of the ema_align process gets
 // a readgroup object.
-// First combine all (sample, rg) pairs with all (sample, bin) pairs.
-readgroup_ema_ch.combine(bins_ema_ch).set{data_ema_ch}
-// Filter out all pairs where the sample ID doesn't match.
-data_ema_ch.filter { it[0] == it[2] }.set{data_ema_ch}
-// Map from (sample, rg, sample, bin) to (sample, rg, bin).
-data_ema_ch.map { tuple(it[0], it[1], it[3]) }.set{data_ema_ch}
+// First group EMA bins by key (sample), yielding a channel with (sample, bin tuple) records.
+bins_ema_ch.groupTuple().set{grouped_bins_ema_ch}
+// Join this channel with the readgroups, obtaining (sample, reagroup, bin tuple) records.
+readgroup_ema_ch.join(grouped_bins_ema_ch).set{data_ema_ch}
+// Transpose this channel (w.r.t. the tuples), obtaining (sample, reagroup, bin) channel.
+data_ema_ch.transpose().set{data_ema_ch}
 
 // Align reads from each bin with EMA.
 process ema_align {
