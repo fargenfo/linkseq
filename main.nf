@@ -605,29 +605,27 @@ process haplotag_bam {
     set sample, file(vcf), file(idx), file(bam), file(bai) from data_haplotag_bam_ch
 
     output:
-    set sample, file("phased.bam") into phased_bam_ch
+    set sample, file("${sample}.bam") into phased_bam_ch
 
     script:
     """
-    whatshap haplotag --ignore-read-groups --reference $reference -o "phased.bam" $vcf $bam
+    whatshap haplotag --ignore-read-groups --reference $reference -o "${sample}.bam" $vcf $bam
     """
 }
 
 process index_phased_bam {
-    publishDir "$outdir/$sample/bam", mode: 'copy', pattern: '*.bam', overwrite: true,
-        saveAs: { filename -> "${sample}.bam" }
-    publishDir "$outdir/$sample/bam", mode: 'copy', pattern: '*.bam.bai', overwrite: true,
-        saveAs: { filename -> "${sample}.bam.bai" }
+    publishDir "$outdir/$sample/bam", mode: 'copy', pattern: '*.bam', overwrite: true
+    publishDir "$outdir/$sample/bam", mode: 'copy', pattern: '*.bam.bai', overwrite: true
 
     input:
     set sample, file(bam) from phased_bam_ch
 
     output:
-    set sample, file("phased.bam"), file("phased.bam.bai") into indexed_phased_bam_qualimap_ch, indexed_phased_bam_bx_ch
+    set sample, file(bam), file("${bam}.bai") into indexed_phased_bam_qualimap_ch, indexed_phased_bam_bx_ch
 
     script:
     """
-    samtools index "phased.bam"
+    samtools index $bam
     """
 }
 
