@@ -3,9 +3,11 @@ name: linkseq
 
 channels:
   - bioconda
-  - conda-forge
   - defaults
   - AgBiome
+
+# NOTE: conda-forge is needed for multiqc v1.8, but in some bizarre way, conda-forge breaks my Nextflow
+# installation, such that processes are not submitted in parallel properly.
 
 dependencies:
   - nextflow=20.01.0
@@ -21,12 +23,5 @@ dependencies:
   - hapcut2=1.2
   - whatshap=0.18
   - qualimap=2.2.2a
-  - multiqc=1.8
+  #- multiqc=1.8
   - snpeff=4.3.1t
-    #  - bcftools=1.9
-    #  - whatshap=0.18
-    #  - tabix=0.2.6
-    #  - perl-vcftools-vcf=0.1.16
-    #  - bbtools=37.62
-    #  - fastp=0.20.0
-    #  - sickle-trim=1.33
