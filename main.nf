@@ -14,6 +14,9 @@ the cache? Or will all samples run from the start?
 
 // Input parameters.
 params.fastq_csv = null
+params.sample = null
+params.fastq_r1 = null
+params.fastq_r1 = null
 params.reference = null
 params.targets = null
 params.whitelist = null
@@ -36,7 +39,6 @@ if (params.help){
 }
 
 // Make sure necessary input parameters are assigned.
-assert params.fastq_csv != null, 'Input parameter "fastq_csv" cannot be unasigned.'
 assert params.reference != null, 'Input parameter "reference" cannot be unasigned.'
 assert params.targets != null, 'Input parameter "targets" cannot be unasigned.'
 assert params.whitelist != null, 'Input parameter "whitelist" cannot be unasigned.'
@@ -44,9 +46,12 @@ assert params.bcbins != null, 'Input parameter "bcbins" cannot be unasigned.'
 assert params.dbsnp != null, 'Input parameter "dbsnp" cannot be unasigned.'
 assert params.outdir != null, 'Input parameter "outdir" cannot be unasigned.'
 
+if(params.fastq_csv == null & params.sample == null) {
+    assert false, "Either --fastq_csv must be provided, or --sample, --fastq_r1 and --fastq_r2 must be provided."
+}
+
 println "P I P E L I N E     I P U T S    "
 println "================================="
-println "fastq_csv          : ${params.fastq_csv}"
 println "reference          : ${params.reference}"
 println "targets            : ${params.targets}"
 println "whitelist          : ${params.whitelist}"
@@ -62,17 +67,30 @@ whitelist = file(params.whitelist, checkIfExists: true)
 dbsnp = file(params.dbsnp, checkIfExists: true)
 outdir = file(params.outdir)
 
-// Read FASTQ read 1 and 2, as well as sample IDs, from input CSV file.
-Channel.fromPath(params.fastq_csv)
-    .splitCsv(header:true)
-    .map{ row-> tuple(row.sample, file(row.read1), file(row.read2)) }
-    .into { fastq_ch; fastq_print_ch }
+if(params.fastq_csv != null) {
+    // Read FASTQ read 1 and 2, as well as sample IDs, from input CSV file.
+    Channel.fromPath(params.fastq_csv)
+        .splitCsv(header:true)
+        .map{ row-> tuple(row.sample, file(row.read1), file(row.read2)) }
+        .into { fastq_ch; fastq_print_ch }
+} else {
+    // Put sample name and FASTQ read 1 and 2 in a channel.
+    Channel.of( tuple(params.sample, file(params.fastq_r1), file(params.fastq_r2)) )
+        .into { fastq_ch; fastq_print_ch }
+}
 
+// Print the samples to be processed.
 println 'Sample ID\tFASTQ read 1 files\tFASTQ read 2 files'
 fastq_print_ch.subscribe onNext: { row ->
     sample = row[0]
-    read1 = row[1].name.join(',')
-    read2 = row[2].name.join(',')
+    // Get the filenames from the file objects.
+    read1 = row[1].name
+    read2 = row[2].name
+    // read1 and read2 may be either a single string or a list of strings.
+    if(read1 instanceof List) {
+        read1 = read1.join(',')
+        read2 = read2.join(',')
+    }
     println sample + "\t"  + read1 + "\t" + read2
     }, onComplete: {
     println '==================================' }
