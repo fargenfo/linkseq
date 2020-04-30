@@ -500,10 +500,10 @@ process annotate_rsid {
 process subset_SNPs {
 
     input:
-    set file(vcf), file(idx) from rsid_annotated_vcf_ch
+    set sample, file(vcf), file(idx) from rsid_annotated_vcf_ch
 
     output:
-    set file("snp.vcf"), file("snp.vcf.idx") into snpsubset_filter_ch
+    set sample, file("snp.vcf"), file("snp.vcf.idx") into snpsubset_filter_ch
 
     script:
     """
@@ -518,10 +518,10 @@ process subset_SNPs {
 process subset_indels {
 
     input:
-    set file(vcf), file(idx) from rsid_annotated_vcf_ch
+    set sample, file(vcf), file(idx) from rsid_annotated_vcf_ch
 
     output:
-    set file("indel.vcf"), file("indel.vcf.idx") into indelsubset_filter_ch
+    set sample, file("indel.vcf"), file("indel.vcf.idx") into indelsubset_filter_ch
 
     script:
     """
@@ -561,10 +561,10 @@ process hard_filter_SNPs {
 process HardFilterINDELs {
 
     input:
-    set file(vcf), file(idx) from indelsubset_filter_ch
+    set sample, file(vcf), file(idx) from indelsubset_filter_ch
 
     output:
-    set file("filtered_indel.vcf"), file("filtered_indel.vcf.idx") into filtered_indel_ch
+    set sample, file("filtered_indel.vcf"), file("filtered_indel.vcf.idx") into filtered_indel_ch
 
     script:
     """
@@ -584,8 +584,8 @@ process HardFilterINDELs {
 process join_SNPs_INDELs {
 
     input:
-    set file(vcf_snp), file(idx_snp) from filtered_snp_ch
-    set file(vcf_indel), file(idx_indel) from filtered_indel_ch
+    set sample, file(vcf_snp), file(idx_snp) from filtered_snp_ch
+    set sample, file(vcf_indel), file(idx_indel) from filtered_indel_ch
 
     output:
     set file("joined_snp_indel.vcf"), file("joined_snp_indel.vcf.idx") into joined_snp_indel_ch
