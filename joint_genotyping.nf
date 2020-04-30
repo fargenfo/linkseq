@@ -271,6 +271,7 @@ process join_SNPs_INDELs {
     -I $vcf_snp \
     -I $vcf_indel \
     -O "joined_snp_indel.vcf"
+    --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
     """
 }
 
