@@ -497,7 +497,7 @@ process annotate_rsid {
 
 
 // Splitting VCF into SNPs and indels, because they have to be filtered seperately
-process subset_SNPs {
+process subset_snps {
 
     input:
     set sample, file(vcf), file(idx) from rsid_annotated_vcf_ch
@@ -535,7 +535,7 @@ process subset_indels {
 
 // Hard filter variants, adding various filter tags to the "FILTER" field of the VCF.
 // FIXME: I'm getting warnings that MQRankSum and ReadPosRankSum don't exist.
-process hard_filter_SNPs {
+process hard_filter_snps {
     input:
     set sample, file(vcf), file(idx) from snpsubset_filter_ch
 
@@ -558,7 +558,7 @@ process hard_filter_SNPs {
     """
 }
 
-process HardFilterINDELs {
+process hard_filter_indels {
 
     input:
     set sample, file(vcf), file(idx) from indelsubset_filter_ch
@@ -581,7 +581,7 @@ process HardFilterINDELs {
 
 // Merge the SNP and INDEL vcfs before continuing.
 // There will only be one joint vcf with all samples, so we don't need to set sample.
-process join_SNPs_INDELs {
+process join_snps_indels {
 
     input:
     set sample, file(vcf_snp), file(idx_snp) from filtered_snp_ch
