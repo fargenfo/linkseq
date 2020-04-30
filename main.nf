@@ -16,7 +16,7 @@ the cache? Or will all samples run from the start?
 params.fastq_csv = null
 params.sample = null
 params.fastq_r1 = null
-params.fastq_r1 = null
+params.fastq_r2 = null
 params.reference = null
 params.targets = null
 params.whitelist = null
