@@ -22,6 +22,7 @@ params.targets = null
 params.whitelist = null
 params.bcbins = null
 params.dbsnp = null
+params.snpeff_datadir = null
 params.outdir = null
 params.help = false
 
@@ -44,6 +45,7 @@ assert params.targets != null, 'Input parameter "targets" cannot be unasigned.'
 assert params.whitelist != null, 'Input parameter "whitelist" cannot be unasigned.'
 assert params.bcbins != null, 'Input parameter "bcbins" cannot be unasigned.'
 assert params.dbsnp != null, 'Input parameter "dbsnp" cannot be unasigned.'
+assert params.snpeff_datadir != null, 'Input parameter "snpeff_datadir" cannot be unasigned.'
 assert params.outdir != null, 'Input parameter "outdir" cannot be unasigned.'
 
 if(params.fastq_csv == null & params.sample == null) {
@@ -65,6 +67,7 @@ reference = file(params.reference, checkIfExists: true)
 targets = file(params.targets, checkIfExists: true)
 whitelist = file(params.whitelist, checkIfExists: true)
 dbsnp = file(params.dbsnp, checkIfExists: true)
+snpeff_datadir = file(params.snpeff_datadir, checkIfExists: true)
 outdir = file(params.outdir)
 
 if(params.fastq_csv != null) {
@@ -521,6 +524,9 @@ process filter_variants {
 }
 
 // Annotate the VCF with effect prediction. Output some summary stats from the effect prediction as well.
+// We tell SnpEff not to attempt to download the reference data, and supply the reference data directory
+// path explicitly instead. Otherwise, SnpEff will download these data for every new environment and for
+// every new container.
 process annotate_effect {
     publishDir "$outdir/multiqc_logs/SnpEff", pattern: "snpEff_stats.csv", mode: 'copy', overwrite: true,
         saveAs: { filename -> "$sample" }
@@ -538,6 +544,8 @@ process annotate_effect {
          -i vcf \
          -o vcf \
          -csvStats "snpEff_stats.csv" \
+         -nodownload \
+         -dataDir $snpeff_datadir \
          hg38 \
          -v \
          $vcf > "effect_annotated.vcf"
