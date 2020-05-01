@@ -16,7 +16,7 @@ the cache? Or will all samples run from the start?
 params.fastq_csv = null
 params.sample = null
 params.fastq_r1 = null
-params.fastq_r1 = null
+params.fastq_r2 = null
 params.reference = null
 params.targets = null
 params.whitelist = null
@@ -482,7 +482,7 @@ process annotate_rsid {
     set sample, file(vcf), file(idx) from genotyped_vcf_ch
 
     output:
-    set sample, file("rsid_ann.vcf"), file("rsid_ann.vcf.idx") into rsid_annotated_vcf_ch
+    set sample, file("rsid_ann.vcf"), file("rsid_ann.vcf.idx") into rsid_annotated_vcf_snp_ch, rsid_annotated_vcf_indel_ch
 
     script:
     """
@@ -500,7 +500,7 @@ process annotate_rsid {
 process subset_snps {
 
     input:
-    set sample, file(vcf), file(idx) from rsid_annotated_vcf_ch
+    set sample, file(vcf), file(idx) from rsid_annotated_vcf_snp_ch
 
     output:
     set sample, file("snp.vcf"), file("snp.vcf.idx") into snpsubset_filter_ch
@@ -518,7 +518,7 @@ process subset_snps {
 process subset_indels {
 
     input:
-    set sample, file(vcf), file(idx) from rsid_annotated_vcf_ch
+    set sample, file(vcf), file(idx) from rsid_annotated_vcf_indel_ch
 
     output:
     set sample, file("indel.vcf"), file("indel.vcf.idx") into indelsubset_filter_ch
@@ -540,7 +540,7 @@ process hard_filter_snps {
     set sample, file(vcf), file(idx) from snpsubset_filter_ch
 
     output:
-    set sample, file("filtered.vcf"), file("filtered.vcf.idx") into filtered_vcf_ch
+    set sample, file("filtered.vcf"), file("filtered.vcf.idx") into filtered_snp_vcf_ch
 
     script:
     """
@@ -564,7 +564,7 @@ process hard_filter_indels {
     set sample, file(vcf), file(idx) from indelsubset_filter_ch
 
     output:
-    set sample, file("filtered_indel.vcf"), file("filtered_indel.vcf.idx") into filtered_indel_ch
+    set sample, file("filtered_indel.vcf"), file("filtered_indel.vcf.idx") into filtered_indel_vcf_ch
 
     script:
     """
@@ -584,11 +584,11 @@ process hard_filter_indels {
 process join_snps_indels {
 
     input:
-    set sample, file(vcf_snp), file(idx_snp) from filtered_snp_ch
-    set sample, file(vcf_indel), file(idx_indel) from filtered_indel_ch
+    set sample, file(vcf_snp), file(idx_snp) from filtered_snp_vcf_ch
+    set sample, file(vcf_indel), file(idx_indel) from filtered_indel_vcf_ch
 
     output:
-    set file("joined_snp_indel.vcf"), file("joined_snp_indel.vcf.idx") into joined_snp_indel_ch
+    set file("joined_snp_indel.vcf"), file("joined_snp_indel.vcf.idx") into joined_snp_indel_vcf_ch
 
     script:
     """
@@ -606,7 +606,7 @@ process annotate_effect {
         saveAs: { filename -> "$sample" }
 
     input:
-    set sample, file(vcf), file(idx) from joined_snp_indel_ch
+    set sample, file(vcf), file(idx) from joined_snp_indel_vcf_ch
 
     output:
     set sample, file("effect_annotated.vcf") into variants_phase_ch
