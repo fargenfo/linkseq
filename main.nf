@@ -510,7 +510,7 @@ process subset_snps {
     gatk SelectVariants \
     -V $vcf \
     -select-type SNP \
-    -O "snp.vcf"
+    -O "snp.vcf" \
     --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
     """
 }
@@ -528,7 +528,7 @@ process subset_indels {
     gatk SelectVariants \
     -V $vcf \
     -select-type INDEL \
-    -O "indel.vcf"
+    -O "indel.vcf" \
     --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
     """
 }
@@ -574,7 +574,7 @@ process hard_filter_indels {
     -filter "QUAL < 30.0" --filter-name "QUAL30" \
     -filter "FS > 200.0" --filter-name "FS200" \
     -filter "ReadPosRankSum < -20.0" --filter-name "ReadPosRankSum-20" \
-    -O "filtered_indel.vcf"
+    -O "filtered_indel.vcf" \
     --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
     """
  }
@@ -588,14 +588,14 @@ process join_snps_indels {
     set sample, file(vcf_indel), file(idx_indel) from filtered_indel_vcf_ch
 
     output:
-    set file("joined_snp_indel.vcf"), file("joined_snp_indel.vcf.idx") into joined_snp_indel_vcf_ch
+    set sample, file("joined_snp_indel.vcf"), file("joined_snp_indel.vcf.idx") into joined_snp_indel_vcf_ch
 
     script:
     """
     gatk MergeVcfs \
     -I $vcf_snp \
     -I $vcf_indel \
-    -O "joined_snp_indel.vcf"
+    -O "joined_snp_indel.vcf" \
     --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
     """
 }
