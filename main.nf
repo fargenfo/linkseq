@@ -485,7 +485,7 @@ process annotate_rsid {
     set sample, file(vcf), file(idx) from genotyped_vcf_ch
 
     output:
-    set sample, file("rsid_ann.vcf"), file("rsid_ann.vcf.idx") into rsid_annotated_vcf_ch
+    set sample, file("rsid_ann.vcf"), file("rsid_ann.vcf.idx") into rsid_annotated_vcf_snp_ch, rsid_annotated_vcf_indel_ch
 
     script:
     """
@@ -498,14 +498,52 @@ process annotate_rsid {
     """
 }
 
-// Filter variants, adding various filter tags to the "FILTER" field of the VCF.
-// FIXME: I'm getting warnings that MQRankSum and ReadPosRankSum don't exist.
-process filter_variants {
+
+// Splitting VCF into SNPs and indels, because they have to be filtered seperately
+process subset_snps {
+
     input:
-    set sample, file(vcf), file(idx) from rsid_annotated_vcf_ch
+    set sample, file(vcf), file(idx) from rsid_annotated_vcf_snp_ch
 
     output:
-    set sample, file("filtered.vcf"), file("filtered.vcf.idx") into filtered_vcf_ch
+    set sample, file("snp.vcf"), file("snp.vcf.idx") into snpsubset_filter_ch
+
+    script:
+    """
+    gatk SelectVariants \
+    -V $vcf \
+    -select-type SNP \
+    -O "snp.vcf" \
+    --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
+    """
+}
+
+process subset_indels {
+
+    input:
+    set sample, file(vcf), file(idx) from rsid_annotated_vcf_indel_ch
+
+    output:
+    set sample, file("indel.vcf"), file("indel.vcf.idx") into indelsubset_filter_ch
+
+    script:
+    """
+    gatk SelectVariants \
+    -V $vcf \
+    -select-type INDEL \
+    -O "indel.vcf" \
+    --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
+    """
+}
+
+// Hard filter variants, adding various filter tags to the "FILTER" field of the VCF.
+// FIXME: I'm getting warnings that MQRankSum and ReadPosRankSum don't exist.
+process hard_filter_snps {
+    input:
+    set sample, file(vcf), file(idx) from snpsubset_filter_ch
+
+    output:
+    set sample, file("filtered.vcf"), file("filtered.vcf.idx") into filtered_snp_vcf_ch
 
     script:
     """
@@ -523,6 +561,48 @@ process filter_variants {
     """
 }
 
+process hard_filter_indels {
+
+    input:
+    set sample, file(vcf), file(idx) from indelsubset_filter_ch
+
+    output:
+    set sample, file("filtered_indel.vcf"), file("filtered_indel.vcf.idx") into filtered_indel_vcf_ch
+
+    script:
+    """
+    gatk VariantFiltration \
+    -V $vcf \
+    -filter "QD < 2.0" --filter-name "QD2" \
+    -filter "QUAL < 30.0" --filter-name "QUAL30" \
+    -filter "FS > 200.0" --filter-name "FS200" \
+    -filter "ReadPosRankSum < -20.0" --filter-name "ReadPosRankSum-20" \
+    -O "filtered_indel.vcf" \
+    --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
+    """
+ }
+
+// Merge the SNP and INDEL vcfs before continuing.
+// There will only be one joint vcf with all samples, so we don't need to set sample.
+process join_snps_indels {
+
+    input:
+    set sample, file(vcf_snp), file(idx_snp) from filtered_snp_vcf_ch
+    set sample, file(vcf_indel), file(idx_indel) from filtered_indel_vcf_ch
+
+    output:
+    set sample, file("joined_snp_indel.vcf"), file("joined_snp_indel.vcf.idx") into joined_snp_indel_vcf_ch
+
+    script:
+    """
+    gatk MergeVcfs \
+    -I $vcf_snp \
+    -I $vcf_indel \
+    -O "joined_snp_indel.vcf" \
+    --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
+    """
+}
+
 // Annotate the VCF with effect prediction. Output some summary stats from the effect prediction as well.
 // We tell SnpEff not to attempt to download the reference data, and supply the reference data directory
 // path explicitly instead. Otherwise, SnpEff will download these data for every new environment and for
@@ -532,7 +612,7 @@ process annotate_effect {
         saveAs: { filename -> "$sample" }
 
     input:
-    set sample, file(vcf), file(idx) from filtered_vcf_ch
+    set sample, file(vcf), file(idx) from joined_snp_indel_vcf_ch
 
     output:
     set sample, file("effect_annotated.vcf") into variants_phase_ch

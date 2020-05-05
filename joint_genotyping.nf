@@ -254,6 +254,27 @@ process apply_vqsr_snps {
     """
 }
 
+// Merge the SNP and INDEL vcfs before continuing.
+// There will only be one joint vcf with all samples, so we don't need to set sample.
+process join_SNPs_INDELs {
+
+    input:
+    set file(vcf_snp), file(idx_snp) from recalibrated_vcf_ch
+    set file(vcf_indel), file(idx_indel) from recalibrated_indels_ch
+
+    output:
+    set file("joined_snp_indel.vcf"), file("joined_snp_indel.vcf.idx") into joined_snp_indel_ch
+
+    script:
+    """
+    gatk MergeVcfs \
+    -I $vcf_snp \
+    -I $vcf_indel \
+    -O "joined_snp_indel.vcf"
+    --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
+    """
+}
+
 // TODO:
 // Consider whether to use a supporting dataset. I commented out the "-supporting" argument,
 // because it biases the data toward the population the supporting dataset is based on. If
@@ -263,7 +284,7 @@ process apply_vqsr_snps {
 // Calculate the genotype posteriors based on all the samples in the VCF.
 process refine_genotypes {
     input:
-    set file(vcf), file(idx) from recalibrated_vcf_ch
+    set file(vcf), file(idx) from joined_snp_indel_ch
 
     output:
     set file("refined.vcf"), file("refined.vcf.idx") into refined_vcf_ch
