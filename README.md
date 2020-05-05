@@ -6,8 +6,8 @@
 ## Table of Contents  
 * [Overview](#overview)
 * [Workflow](#workflow)
-* [Align reads and call variants with `single_sample.nf`](#align-reads-and-call-variants-with-single_samplenf)
-* [Joint genotyping with `multi_sample.nf`](#joint-genotyping-with-multi_samplenf)
+* [Align reads and call variants with `main.nf`](#align-reads-and-call-variants-with-mainnf)
+* [Joint genotyping with `joint_genotyping.nf`](#joint-genotyping-with-joint_genotypingnf)
 * [Phase variants with `phase.nf`](#phase-variants-with-phasenf)
 * [Reference resources](#reference-resources)
 	* [Barcode whitelist](#barcode-whitelist)
@@ -45,11 +45,11 @@ The pipeline is written in [Nextflow](https://www.nextflow.io/) and contains two
 * For each sample, align reads, call variants, and phase VCF and BAM with `main.nf`.
 * Perform joint genotyping of all samples with `joint_genotyping.nf` (no phasing).
 
-## Align reads and call variants with `single_sample.nf`
+## Align reads and call variants with `main.nf`
 
 **TODO**
 
-## Joint genotyping with `multi_sample.nf`
+## Joint genotyping with `joint_genotyping.nf`
 
 **TODO**
 
