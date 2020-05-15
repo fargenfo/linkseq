@@ -52,7 +52,7 @@ if(params.fastq_csv == null & params.sample == null) {
     assert false, "Either --fastq_csv must be provided, or --sample, --fastq_r1 and --fastq_r2 must be provided."
 }
 
-println "P I P E L I N E     I P U T S    "
+println "L I N K S E Q    "
 println "================================="
 println "reference          : ${params.reference}"
 println "targets            : ${params.targets}"
@@ -60,7 +60,19 @@ println "whitelist          : ${params.whitelist}"
 println "bcbins             : ${params.bcbins}"
 println "dbsnp              : ${params.dbsnp}"
 println "outdir             : ${params.outdir}"
-println '=================================='
+println "================================="
+println "Command line        : ${workflow.commandLine}"
+println "Profile             : ${workflow.profile}"
+println "Project dir         : ${workflow.projectDir}"
+println "Launch dir          : ${workflow.launchDir}"
+println "Work dir            : ${workflow.workDir}"
+println "Container engine    : ${workflow.containerEngine}"
+println "================================="
+println "Project             : $workflow.projectDir"
+println "Git info            : $workflow.repository - $workflow.revision [$workflow.commitId]"
+println "Cmd line            : $workflow.commandLine"
+println "Manifest version    : $workflow.manifest.version"
+println "================================="
 
 // Get file handlers for input files.
 reference = file(params.reference, checkIfExists: true)
@@ -864,5 +876,36 @@ process multiqc {
     """
     multiqc -f $outdir/multiqc_logs
     """
+}
+
+
+workflow.onComplete {
+    log.info "L I N K S E Q   "
+    log.info "================================="
+    log.info "reference          : ${params.reference}"
+    log.info "targets            : ${params.targets}"
+    log.info "whitelist          : ${params.whitelist}"
+    log.info "bcbins             : ${params.bcbins}"
+    log.info "dbsnp              : ${params.dbsnp}"
+    log.info "outdir             : ${params.outdir}"
+    log.info "================================="
+    log.info "Command line        : ${workflow.commandLine}"
+    log.info "Profile             : ${workflow.profile}"
+    log.info "Project dir         : ${workflow.projectDir}"
+    log.info "Launch dir          : ${workflow.launchDir}"
+    log.info "Work dir            : ${workflow.workDir}"
+    log.info "Container engine    : ${workflow.containerEngine}"
+    log.info "================================="
+    log.info "Project             : $workflow.projectDir"
+    log.info "Git info            : $workflow.repository - $workflow.revision [$workflow.commitId]"
+    log.info "Cmd line            : $workflow.commandLine"
+    log.info "Manifest version    : $workflow.manifest.version"
+    log.info "================================="
+    log.info "Completed at        : ${workflow.complete}"
+    log.info "Duration            : ${workflow.duration}"
+    log.info "Success             : ${workflow.success}"
+    log.info "Exit status         : ${workflow.exitStatus}"
+    log.info "Error report        : ${(workflow.errorReport ?: '-')}"
+    log.info "================================="
 }
 
