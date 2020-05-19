@@ -99,4 +99,10 @@ Specifically this file:
 
 Our particular sequencing experiment uses the Agilent SureSelect Human All Exon V6 UTR kit to capture the exome. The folder `reference/sureselect_human_all_exon_v6_utr_grch38` contains an **example BED file**, and a `README` that explains where this file comes from. If `LinkSeq` is unwilling to accept your BED file, this example may help debug the problem.
 
+### SnpEff data
 
+Use the `reference/snpeff_data.sh` script to download SnpEff database for `hg38`. In `LinkSeq`, the path to this database is used together with the `dataDir` argument in SnpEff.
+
+The handle of this database can also be found by running `snpEff databases | grep hg38`.
+
+This is particularly useful when running the pipeline in the Docker container, as it saves a lot of time. If we do not supply `-dataDir` in SnpEff, it will download the database every time it is run. This download may even sporadically fail, crashing the whole pipeline.
