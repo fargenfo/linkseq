@@ -1,7 +1,13 @@
+The example.bed file contains a few lines of the interval BED file used in the development of this pipeline.
 
-Obtained from:
+The original file was obtained from:
 https://earray.chem.agilent.com/suredesign/search.htm
 
 Search for "SureSelect Human All Exon V6 UTR" in Agilent Catalog. Choose hg38.
 
-The file S07604624_Padded.bed has been edited so that the first line ("#browser position chr1:11981-12351") is commented out with a "#", because not all BED readers correctly skip this line. If other files are used, this can be done as well.
+We took the S07604624_Padded.bed file and modified it using the following command:
+
+awk 'BEGIN{OFS="\t"}{ if(NR <= 2) { print "#"$0 } else { print $1,$2,$3,$4,0,"." } }' S07604624_Padded.bed > S07604624_Padded_modified.bed
+
+First, the header of the file (the two first lines) are commented out with a "#", because not all BED readers correctly skip these lines. Second, two "empty" columns have been added to the rows in the file, as some programs require the file to have 6 fields, regardless whether these are empty.
+
