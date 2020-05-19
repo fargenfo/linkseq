@@ -1,0 +1,18 @@
+#browser position chr1:11981-12351
+#track name="Padded" description="Agilent SureSelect DNA - SureSelect Human All Exon V6+UTR - Covered bed file extended by 100bp on either side" color=0,0,128 db=hg38
+chr1    11980   12351   ref|DDX11L1,ref|NR_046018,ens|ENST00000456328,ens|ENST00000450305       0       .
+chr1    12495   12902   ref|DDX11L1,ref|NR_046018,ens|ENST00000456328,ens|ENST00000450305       0       .
+chr1    13063   13758   ref|DDX11L1,ref|NR_046018,ens|ENST00000456328,ens|ENST00000450305       0       .
+chr1    14520   15115   ref|WASH7P,ref|NR_024540,ens|ENST00000488147    0       .
+chr1    15695   16014   ref|WASH7P,ref|NR_024540,ens|ENST00000488147    0       .
+chr1    16643   17198   ref|WASH7P,ref|NR_024540,ens|ENST00000488147    0       .
+chr1    17147   18221   ref|WASH7P,ref|NR_024540,ens|ENST00000488147,miRNA|hsa-miR-6859-5p,miRNA|hsa-miR-6859-3p        0       .
+chr1    18116   18511   ref|WASH7P,ref|NR_024540,ens|ENST00000488147    0       .
+chr1    18863   19269   ref|WASH7P,ref|NR_024540,ens|ENST00000488147    0       .
+chr1    24160   24632   ref|WASH7P,ref|NR_024540,ens|ENST00000488147    0       .
+chr1    24555   24955   ref|WASH7P,ref|NR_024540,ens|ENST00000488147    0       .
+chr1    30213   30642   ens|ENST00000469289,ens|ENST00000473358,miRNA|hsa-miR-1302      0       .
+chr1    35020   35592   ref|FAM138F,ref|FAM138C,ref|FAM138A,ref|NR_026818,ref|NR_026822,ref|NR_026820,ens|ENST00000417324,ens|ENST00000461467   0       .
+chr1    35465   35879   ref|FAM138F,ref|FAM138C,ref|FAM138A,ref|NR_026818,ref|NR_026822,ref|NR_026820,ens|ENST00000417324,ens|ENST00000461467   0       .
+chr1    65409   65826   -       0       .
+chr1    65676   66072   -       0       .

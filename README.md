@@ -83,8 +83,20 @@ The `reference/gatk_bundle.sh` script downloads all the resources needed from th
 > GATK resource bundle
 > https://console.cloud.google.com/storage/browser/genomics-public-data/resources/broad/hg38/v0
 
-### Exome sequencing targets
+### Interval BED file
 
-Our particular sequencing experiment uses the Agilent SureSelect Human All Exon V6 UTR kit to capture the exome. `reference/sureselect_human_all_exon_v6_utr_grch38` contains the target BED file we use and some details are in the README.
+You should always use an interval BED file when running this pipeline. If you're running whole-genome sequencing, you might want to use WGS calling regions such as those from the GATK Resource Bundle:
+
+> GATK Resource Bundle
+>
+> https://gatk.broadinstitute.org/hc/en-us/articles/360035890811-Resource-bundle
+
+Specifically this file:
+
+> WGS calling regions hg38
+>
+> https://storage.cloud.google.com/genomics-public-data/resources/broad/hg38/v0/wgs_calling_regions.hg38.interval_list
+
+Our particular sequencing experiment uses the Agilent SureSelect Human All Exon V6 UTR kit to capture the exome. The folder `reference/sureselect_human_all_exon_v6_utr_grch38` contains an **example BED file**, and a `README` that explains where this file comes from. If `LinkSeq` is unwilling to accept your BED file, this example may help debug the problem.
 
 
