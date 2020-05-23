@@ -40,7 +40,7 @@ assert params.hapmap != null, 'Input parameter "hapmap" cannot be unasigned.'
 assert params.targets != null, 'Input parameter "targets" cannot be unasigned.'
 assert params.outdir != null, 'Input parameter "outdir" cannot be unasigned.'
 
-println "P I P E L I N E     I P U T S    "
+println "L I N K S E Q -- Joint Genotyping    "
 println "================================="
 println "gvcf_path          : ${params.gvcf_path}"
 println "reference          : ${params.reference}"
@@ -52,6 +52,20 @@ println "omni               : ${params.omni}"
 println "hapmap             : ${params.hapmap}"
 println "targets            : ${params.targets}"
 println "outdir             : ${params.outdir}"
+println "================================="
+println "Command line        : ${workflow.commandLine}"
+println "Profile             : ${workflow.profile}"
+println "Project dir         : ${workflow.projectDir}"
+println "Launch dir          : ${workflow.launchDir}"
+println "Work dir            : ${workflow.workDir}"
+println "Container engine    : ${workflow.containerEngine}"
+println "================================="
+println "Project             : $workflow.projectDir"
+println "Git info            : $workflow.repository - $workflow.revision [$workflow.commitId]"
+println "Cmd line            : $workflow.commandLine"
+println "Manifest version    : $workflow.manifest.version"
+println "================================="
+
 
 // Get file handlers for input files.
 reference = file(params.reference)
@@ -424,7 +438,42 @@ process multiqc {
 
     script:
     """
-    multiqc -f ${params.outdir} --config ${params.multiqc_config}
+    multiqc -f ${params.outdir}
     """
+}
+
+
+workflow.onComplete {
+    log.info "L I N K S E Q -- Joint Genotyping    "
+    log.info "================================="
+    log.info "gvcf_path          : ${params.gvcf_path}"
+    log.info "reference          : ${params.reference}"
+    log.info "dbsnp              : ${params.dbsnp}"
+    log.info "mills              : ${params.mills}"
+    log.info "kGphase1           : ${params.kGphase1}"
+    log.info "kGphase3           : ${params.kGphase3}"
+    log.info "omni               : ${params.omni}"
+    log.info "hapmap             : ${params.hapmap}"
+    log.info "targets            : ${params.targets}"
+    log.info "outdir             : ${params.outdir}"
+    log.info "================================="
+    log.info "Command line        : ${workflow.commandLine}"
+    log.info "Profile             : ${workflow.profile}"
+    log.info "Project dir         : ${workflow.projectDir}"
+    log.info "Launch dir          : ${workflow.launchDir}"
+    log.info "Work dir            : ${workflow.workDir}"
+    log.info "Container engine    : ${workflow.containerEngine}"
+    log.info "================================="
+    log.info "Project             : $workflow.projectDir"
+    log.info "Git info            : $workflow.repository - $workflow.revision [$workflow.commitId]"
+    log.info "Cmd line            : $workflow.commandLine"
+    log.info "Manifest version    : $workflow.manifest.version"
+    log.info "================================="
+    log.info "Completed at        : ${workflow.complete}"
+    log.info "Duration            : ${workflow.duration}"
+    log.info "Success             : ${workflow.success}"
+    log.info "Exit status         : ${workflow.exitStatus}"
+    log.info "Error report        : ${(workflow.errorReport ?: '-')}"
+    log.info "================================="
 }
 
