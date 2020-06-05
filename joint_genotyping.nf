@@ -3,6 +3,12 @@
 Author: Ólavur Mortensen <olavur@fargen.fo>
 */
 
+/*
+TODO
+Make the input path smarter.
+Use SnpEff dataDir
+*/
+
 // Input parameters.
 params.gvcf_path = null
 params.reference = null
@@ -40,7 +46,7 @@ assert params.hapmap != null, 'Input parameter "hapmap" cannot be unasigned.'
 assert params.targets != null, 'Input parameter "targets" cannot be unasigned.'
 assert params.outdir != null, 'Input parameter "outdir" cannot be unasigned.'
 
-println "P I P E L I N E     I P U T S    "
+println "L I N K S E Q -- Joint Genotyping    "
 println "================================="
 println "gvcf_path          : ${params.gvcf_path}"
 println "reference          : ${params.reference}"
@@ -52,6 +58,20 @@ println "omni               : ${params.omni}"
 println "hapmap             : ${params.hapmap}"
 println "targets            : ${params.targets}"
 println "outdir             : ${params.outdir}"
+println "================================="
+println "Command line        : ${workflow.commandLine}"
+println "Profile             : ${workflow.profile}"
+println "Project dir         : ${workflow.projectDir}"
+println "Launch dir          : ${workflow.launchDir}"
+println "Work dir            : ${workflow.workDir}"
+println "Container engine    : ${workflow.containerEngine}"
+println "================================="
+println "Project             : $workflow.projectDir"
+println "Git info            : $workflow.repository - $workflow.revision [$workflow.commitId]"
+println "Cmd line            : $workflow.commandLine"
+println "Manifest version    : $workflow.manifest.version"
+println "================================="
+
 
 // Get file handlers for input files.
 reference = file(params.reference)
@@ -64,11 +84,6 @@ kGphase3 = file(params.kGphase3)
 omni = file(params.omni)
 hapmap = file(params.hapmap)
 targets = file(params.targets)
-
-// Get a list of GVCFs, and parse them to a format that GenomicsDBImport understands.
-//gvcf_paths = file(params.gvcf_path + "/*.g.vcf")
-//    .collect {"-V " + it}
-//    .join(' ')
 
 // Get the GVCF indexes.
 gvcf_idx_ch = Channel.fromPath(params.gvcf_path + "/*.g.vcf.idx")
@@ -116,11 +131,12 @@ process joint_genotyping {
     file genomicsdb from genomicsdb_ch
 
     output:
-    set file("genotyped.vcf"), file("genotyped.vcf.idx") into genotyped_snprecal_ch, genotyped_indelrecal_ch, genotyped_applyrecal_ch
+    set file("genotyped.vcf"), file("genotyped.vcf.idx") into genotyped_subsetsnps_ch, genotyped_subsetindels_ch
 
     script:
     """
     mkdir tmp
+    export TILEDB_DISABLE_FILE_LOCKING=1
     gatk GenotypeGVCFs \
         -V gendb://$genomicsdb \
         -R $reference \
@@ -134,6 +150,43 @@ process joint_genotyping {
 The next few processes do variant recalibration. SNPs and indels are recalibrated separately.
 */
 
+// Splitting VCF into SNPs and indels, because they have to be filtered seperately
+process subset_snps {
+
+    input:
+    set file(vcf), file(idx) from genotyped_subsetsnps_ch
+
+    output:
+    set file("snp.vcf"), file("snp.vcf.idx") into genotyped_snprecal_ch, genotyped_snpapplyrecal_ch
+
+    script:
+    """
+    gatk SelectVariants \
+        -V $vcf \
+        -select-type SNP \
+        -O "snp.vcf" \
+        --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
+    """
+}
+
+process subset_indels {
+
+    input:
+    set file(vcf), file(idx) from genotyped_subsetindels_ch
+
+    output:
+    set file("indel.vcf"), file("indel.vcf.idx") into genotyped_indelrecal_ch, genotyped_indelapplyrecal_ch
+
+    script:
+    """
+    gatk SelectVariants \
+        -V $vcf \
+        -select-type INDEL \
+        -O "indel.vcf" \
+        --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
+    """
+}
+
 // TODO:
 // Increasing --max-gaussians may work for larger sample sizes. For two samples, --max-gaussians=4 failed. exoseq uses 4.
 // Filtering with VQSR based on DP is not recommended for exome data. Don't know if I'm currently doing this.
@@ -142,7 +195,6 @@ The next few processes do variant recalibration. SNPs and indels are recalibrate
 // Generate recalibration and tranches tables for recalibrating the SNP variants in the next step.
 process recalibrate_snps {
     input:
-    //file vcf from snps_recalibrate_ch
     set file(vcf), file(idx) from genotyped_snprecal_ch
 
     output:
@@ -170,11 +222,36 @@ process recalibrate_snps {
     """
 }
 
+// Recalibrate SNPs.
+process apply_vqsr_snps {
+    input:
+    set file(vcf), file(idx) from genotyped_snpapplyrecal_ch
+    set file(recal_table), file(recal_table_idx) from snps_recal_table_ch
+    file tranches_table from snps_trances_table_ch
+
+    output:
+    set file("snps_recal.vcf"), file("snps_recal.vcf.idx")into recalibrated_snps_ch
+
+    script:
+    """
+    mkdir tmp
+    gatk ApplyVQSR \
+        -R $reference \
+        -V $vcf \
+        -O "snps_recal.vcf" \
+        --truth-sensitivity-filter-level 99.0 \
+        --tranches-file $tranches_table \
+        --recal-file $recal_table \
+        -mode SNP \
+        --tmp-dir=tmp \
+        --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
+    """
+}
+
 // TODO: use --trust-all-polymorphic?
 // Generate recalibration and tranches tables for recalibrating the indel variants in the next step.
 process recalibrate_indels {
     input:
-    //file vcf from indels_recalibrate_ch
     set file(vcf), file(idx) from genotyped_indelrecal_ch
 
     output:
@@ -203,8 +280,7 @@ process recalibrate_indels {
 // Realibrate indels.
 process apply_vqsr_indels {
     input:
-    //file vcf from indels_apply_ch
-    set file(vcf), file(idx) from genotyped_applyrecal_ch
+    set file(vcf), file(idx) from genotyped_indelapplyrecal_ch
     set file(recal_table), file(recal_table_idx) from indels_recal_table_ch
     file tranches_table from indels_trances_table_ch
 
@@ -227,39 +303,12 @@ process apply_vqsr_indels {
     """
 }
 
-// Recalibrate SNPs.
-process apply_vqsr_snps {
-    input:
-    //file vcf from snps_apply_ch
-    set file(vcf), file(idx) from recalibrated_indels_ch
-    set file(recal_table), file(recal_table_idx) from snps_recal_table_ch
-    file tranches_table from snps_trances_table_ch
-
-    output:
-    set file("recalibrated.vcf"), file("recalibrated.vcf.idx")into recalibrated_vcf_ch
-
-    script:
-    """
-    mkdir tmp
-    gatk ApplyVQSR \
-        -R $reference \
-        -V $vcf \
-        -O "recalibrated.vcf" \
-        --truth-sensitivity-filter-level 99.0 \
-        --tranches-file $tranches_table \
-        --recal-file $recal_table \
-        -mode SNP \
-        --tmp-dir=tmp \
-        --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
-    """
-}
-
 // Merge the SNP and INDEL vcfs before continuing.
-// There will only be one joint vcf with all samples, so we don't need to set sample.
+// NOTE: MergeVcfs tends to fail, perhaps because the VCFs aren't sorted. Therefore, we use SortVcf.
 process join_SNPs_INDELs {
 
     input:
-    set file(vcf_snp), file(idx_snp) from recalibrated_vcf_ch
+    set file(vcf_snp), file(idx_snp) from recalibrated_snps_ch
     set file(vcf_indel), file(idx_indel) from recalibrated_indels_ch
 
     output:
@@ -267,15 +316,16 @@ process join_SNPs_INDELs {
 
     script:
     """
-    gatk MergeVcfs \
+    gatk SortVcf \
     -I $vcf_snp \
     -I $vcf_indel \
-    -O "joined_snp_indel.vcf"
+    -O "joined_snp_indel.vcf" \
     --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
     """
 }
 
 // TODO:
+// More info about genotype refinement: https://gatkforums.broadinstitute.org/gatk/discussion/4723/genotype-refinement-workflow
 // Consider whether to use a supporting dataset. I commented out the "-supporting" argument,
 // because it biases the data toward the population the supporting dataset is based on. If
 // only few samples are in the dataset, a supporting dataset can be quite useful.
@@ -298,11 +348,32 @@ process refine_genotypes {
     """
 }
 
+// Remove non-variant sites, where all samples are hom.ref. Also remove unused alternate alleles, e.g. where there are
+// multiple alternate alleles but some of them are unused.
+process filter_nonvariant_sites {
+
+    input:
+    set file(vcf), file(idx) from refined_vcf_ch
+
+    output:
+    set file("filtered_nonvar.vcf"), file("filtered_nonvar.vcf.idx") into filtered_nonvar_annotate_ch
+
+    script:
+    """
+    gatk SelectVariants \
+        -V $vcf \
+        --exclude-non-variants \
+        --remove-unused-alternates \
+        -O "filtered_nonvar.vcf" \
+        --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
+    """
+}
+
 // Add rsid from dbSNP
 // NOTE: VariantAnnotator is still in beta (as of 20th of March 2019).
 process annotate_rsid {
     input:
-    set file(vcf), file(idx) from refined_vcf_ch
+    set file(vcf), file(idx) from filtered_nonvar_annotate_ch
 
     output:
     set file("rsid_ann.vcf"), file("rsid_ann.vcf.idx") into rsid_annotated_vcf_ch
@@ -424,7 +495,42 @@ process multiqc {
 
     script:
     """
-    multiqc -f ${params.outdir} --config ${params.multiqc_config}
+    multiqc -f ${params.outdir}
     """
+}
+
+
+workflow.onComplete {
+    log.info "L I N K S E Q -- Joint Genotyping    "
+    log.info "================================="
+    log.info "gvcf_path          : ${params.gvcf_path}"
+    log.info "reference          : ${params.reference}"
+    log.info "dbsnp              : ${params.dbsnp}"
+    log.info "mills              : ${params.mills}"
+    log.info "kGphase1           : ${params.kGphase1}"
+    log.info "kGphase3           : ${params.kGphase3}"
+    log.info "omni               : ${params.omni}"
+    log.info "hapmap             : ${params.hapmap}"
+    log.info "targets            : ${params.targets}"
+    log.info "outdir             : ${params.outdir}"
+    log.info "================================="
+    log.info "Command line        : ${workflow.commandLine}"
+    log.info "Profile             : ${workflow.profile}"
+    log.info "Project dir         : ${workflow.projectDir}"
+    log.info "Launch dir          : ${workflow.launchDir}"
+    log.info "Work dir            : ${workflow.workDir}"
+    log.info "Container engine    : ${workflow.containerEngine}"
+    log.info "================================="
+    log.info "Project             : $workflow.projectDir"
+    log.info "Git info            : $workflow.repository - $workflow.revision [$workflow.commitId]"
+    log.info "Cmd line            : $workflow.commandLine"
+    log.info "Manifest version    : $workflow.manifest.version"
+    log.info "================================="
+    log.info "Completed at        : ${workflow.complete}"
+    log.info "Duration            : ${workflow.duration}"
+    log.info "Success             : ${workflow.success}"
+    log.info "Exit status         : ${workflow.exitStatus}"
+    log.info "Error report        : ${(workflow.errorReport ?: '-')}"
+    log.info "================================="
 }
 
