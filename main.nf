@@ -724,7 +724,9 @@ process index_vcf {
 
     script:
     """
-    tabix "$vcf"
+    # Rename VCF, so that we may put both the VCF and the index into the output channel.
+    mv $vcf indexed.vcf.gz
+    tabix indexed.vcf.gz
     """
 }
 
