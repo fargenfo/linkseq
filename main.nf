@@ -146,6 +146,7 @@ process interleave_fastq {
     set sample, file(read1), file(read2) from merged_fastq_ch
 
     output:
+    //set sample, file('interleaved.fastq.gz') into fastq_count_ch, fastq_preproc_ch, fastq_readgroup_ch, fastq_check_sync_ch, fastq_qc_ch
     set sample, file('interleaved.fastq.gz') into fastq_count_ch, fastq_preproc_ch, fastq_readgroup_ch, fastq_check_sync_ch
 
     script:
@@ -694,23 +695,37 @@ process phase_vcf {
     """
 }
 
-// Compress and index the phased VCF.
-process zip_and_index_vcf {
+// Compress the phased VCF.
+process zip_vcf {
     publishDir "$outdir/$sample/vcf", mode: 'copy', pattern: '*.vcf.gz', overwrite: true,
         saveAs: { filename -> "${sample}.vcf.gz" }
-    publishDir "$outdir/$sample/vcf", mode: 'copy', pattern: '*.vcf.gz.tbi', overwrite: true,
-        saveAs: { filename -> "${sample}.vcf.gz.tbi" }
 
     input:
     set sample, file(vcf) from phased_vcf_ch
 
     output:
-    set sample, file("variants.vcf.gz"), file("variants.vcf.gz.tbi") into variants_phase_bam_ch, variants_evaluate_ch, variants_phasing_stats_ch
+    set sample, file("variants.vcf.gz") into variants_compressed_index_ch
 
     script:
     """
     cat $vcf | bgzip -c > "variants.vcf.gz"
-    tabix "variants.vcf.gz"
+    """
+}
+
+// Index the phased VCF.
+process index_vcf {
+    publishDir "$outdir/$sample/vcf", mode: 'copy', pattern: '*.vcf.gz.tbi', overwrite: true,
+        saveAs: { filename -> "${sample}.vcf.gz.tbi" }
+
+    input:
+    set sample, file(vcf) from variants_compressed_index_ch
+
+    output:
+    set sample, file("*.vcf.gz"), file("*.vcf.gz.tbi") into variants_phase_bam_ch, variants_evaluate_ch, variants_phasing_stats_ch
+
+    script:
+    """
+    tabix "$vcf"
     """
 }
 
@@ -750,6 +765,34 @@ process index_phased_bam {
 /*
 Below we perform QC of data.
 */
+
+// Do QG of interleaved FASTQ.
+// While having stats on lanes and reads would be beneficial, doing QC of the merged interleaved FASTQ
+// makes the MultiQC easier to view, as the FastQC report is associated with one sample. When we combine
+// MultiQC reports of several samples, we can easily compare samples.
+// NOTE: FastQC claims 250 MB of memory for every thread that is allocated to it.
+// FIXME: control that the files are published in such a way that the MultiQC report has data
+// with the correct sample name.
+//process fastqc_analysis {
+//    memory { 250.MB * task.cpus }
+//
+//    publishDir "$outdir/multiqc_logs/fastqc", mode: 'copy', pattern: '*.html',
+//        saveAs: {filename -> "$sample"}
+//
+//	input:
+//	set sample, file(fastq) from fastq_qc_ch
+//
+//    output:
+//	val 'done' into fastqc_status_ch
+//
+//    script:
+//    """
+//    # We unset the DISPLAY variable to avoid having FastQC try to open the GUI.
+//    unset DISPLAY
+//    mkdir tmp
+//    fastqc -q --dir tmp --threads ${task.cpus} --outdir . $fastq
+//    """
+//}
 
 // The GATK variant evaluation module counts variants stratified w.r.t. filters, compares
 // overlap with DBSNP, and more.
@@ -865,6 +908,7 @@ process multiqc {
     publishDir "$outdir/multiqc", mode: 'copy', overwrite: true
 
     input:
+    //val fstatus from fastqc_status_ch
     val qstatus from qualimap_status_ch
     val vstatus from variants_status_ch
 
