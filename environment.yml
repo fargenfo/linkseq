@@ -20,6 +20,7 @@ dependencies:
   - bxtools=0.1.0
   - hapcut2=1.2
   - whatshap=0.18
+  - fastqc=0.11.8
   - qualimap=2.2.2a
   - multiqc=1.8
   - snpeff=4.3.1t
