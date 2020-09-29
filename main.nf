@@ -146,8 +146,7 @@ process interleave_fastq {
     set sample, file(read1), file(read2) from merged_fastq_ch
 
     output:
-    //set sample, file('interleaved.fastq.gz') into fastq_count_ch, fastq_preproc_ch, fastq_readgroup_ch, fastq_check_sync_ch, fastq_qc_ch
-    set sample, file('interleaved.fastq.gz') into fastq_count_ch, fastq_preproc_ch, fastq_readgroup_ch, fastq_check_sync_ch
+    set sample, file('interleaved.fastq.gz') into fastq_count_ch, fastq_preproc_ch, fastq_readgroup_ch, fastq_check_sync_ch, fastq_qc_ch
 
     script:
     """
@@ -773,26 +772,26 @@ Below we perform QC of data.
 // NOTE: FastQC claims 250 MB of memory for every thread that is allocated to it.
 // FIXME: control that the files are published in such a way that the MultiQC report has data
 // with the correct sample name.
-//process fastqc_analysis {
-//    memory { 250.MB * task.cpus }
-//
-//    publishDir "$outdir/multiqc_logs/fastqc", mode: 'copy', pattern: '*.html',
-//        saveAs: {filename -> "$sample"}
-//
-//	input:
-//	set sample, file(fastq) from fastq_qc_ch
-//
-//    output:
-//	val 'done' into fastqc_status_ch
-//
-//    script:
-//    """
-//    # We unset the DISPLAY variable to avoid having FastQC try to open the GUI.
-//    unset DISPLAY
-//    mkdir tmp
-//    fastqc -q --dir tmp --threads ${task.cpus} --outdir . $fastq
-//    """
-//}
+process fastqc_analysis {
+    memory { 250.MB * task.cpus }
+
+    publishDir "$outdir/multiqc_logs/fastqc", mode: 'copy', pattern: '*.html',
+        saveAs: {filename -> "$sample"}
+
+	input:
+	set sample, file(fastq) from fastq_qc_ch
+
+    output:
+	val 'done' into fastqc_status_ch
+
+    script:
+    """
+    # We unset the DISPLAY variable to avoid having FastQC try to open the GUI.
+    unset DISPLAY
+    mkdir tmp
+    fastqc -q --dir tmp --threads ${task.cpus} --outdir . $fastq
+    """
+}
 
 // The GATK variant evaluation module counts variants stratified w.r.t. filters, compares
 // overlap with DBSNP, and more.
@@ -908,7 +907,7 @@ process multiqc {
     publishDir "$outdir/multiqc", mode: 'copy', overwrite: true
 
     input:
-    //val fstatus from fastqc_status_ch
+    val fstatus from fastqc_status_ch
     val qstatus from qualimap_status_ch
     val vstatus from variants_status_ch
 
