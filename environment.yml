@@ -22,5 +22,5 @@ dependencies:
   - whatshap=0.18
   - fastqc=0.11.8
   - qualimap=2.2.2a
-  - multiqc=1.8
+  - multiqc=1.9
   - snpeff=4.3.1t
