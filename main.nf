@@ -777,13 +777,13 @@ Below we perform QC of data.
 process fastqc_analysis {
     memory { 250.MB * task.cpus }
 
-    publishDir "$outdir/multiqc_logs/fastqc", mode: 'copy', pattern: '*.html',
-        saveAs: {filename -> "$sample"}
+    publishDir "$outdir/multiqc_logs/fastqc", mode: 'copy', pattern: '*.zip', overwrite: true
 
 	input:
 	set sample, file(fastq) from fastq_qc_ch
 
     output:
+    set sample, file('*.zip') into fastqc_report_ch
 	val 'done' into fastqc_status_ch
 
     script:
@@ -791,7 +791,9 @@ process fastqc_analysis {
     # We unset the DISPLAY variable to avoid having FastQC try to open the GUI.
     unset DISPLAY
     mkdir tmp
-    fastqc -q --dir tmp --threads ${task.cpus} --outdir . $fastq
+    # Rename the FASTQ such that the sample name is correctly displayed in MultiQC
+    mv $fastq ${sample}.fastq.gz
+    fastqc -q --dir tmp --threads ${task.cpus} --outdir . ${sample}.fastq.gz
     """
 }
 
