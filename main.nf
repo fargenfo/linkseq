@@ -29,8 +29,32 @@ params.help = false
 // TODO: make help string
 // Help message
 helpMessage = """
+Align linked-reads with the EMA aligner, call variants with GATK's HaplotypeCaller, filter and annotate variants. Peform
+QC of raw reads, aligned reads and variants.
+
+There are two ways to supply input reads to the pipeline: either using --sample, --fastq_r1 and --fastq_r2, or using --fastq_csv.
+In the CSV option, the header of the CSV must be "sample,read1,read2". To use multiple FASTQs use a glob pattern, for example as
+in the following example:
+
+nextflow run olavurmortensen/linkseq --sample Sample1
+    --fastq_r1 fastqs/Sample1_L005_R1*fastq.gz --fastq_r2 fastqs/Sample1_L005_R1*fastq.gz
+    [other parameters]
+
+For details about the reference data used see:
+https://github.com/olavurmortensen/linkseq#reference-resources
+
 Parameters:
 --outdir            Desired path/name of folder to store output in.
+--sample            Sample name.
+--fastq_r1          Path to FASTQ read 1 (compressed).
+--fastq_r2          Path to FASTQ read 2 (compressed).
+--fastq_csv         Path to a CSV with sample names and FASTQ paths (read 1 and 2).
+--reference         Path to reference FASTA (indexed).
+--targets           Path to interval BED file. Variants will be called in these regions.
+--whitelist         Path to list of 10x Genomics barcodes.
+--dbsnp             Path to dbsnp VCF.
+--snpeff_datadir    Path to SnpEff data.
+--bcbins            Number of barcode bins to use in EMA alignment.
 """.stripIndent()
 
 // Show help when needed
