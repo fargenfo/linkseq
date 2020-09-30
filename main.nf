@@ -343,7 +343,7 @@ process prepare_bqsr_table {
     set sample, file(bam), file(bai) from indexed_bam_prepare_ch
 
     output:
-    set sample, file('bqsr.table') into bqsr_table_analyze_ch, bqsr_table_apply_ch
+    set sample, file('bqsr.table') into bqsr_table_analyze_ch, bqsr_table_apply_ch, bqsr_table_multiqc_ch
 
     script:
     """
@@ -394,7 +394,7 @@ process bqsr_second_pass {
     set sample, file(bam), file(bai) from recalibrated_bam_second_pass_ch
 
     output:
-    set sample, file('bqsr_second_pass.table') into bqsr_second_pass_table_ch
+    set sample, file('bqsr_second_pass.table') into bqsr_second_pass_table_ch, bqsr_second_pass_multiqc_ch
 
     script:
     """
@@ -422,7 +422,7 @@ process analyze_covariates {
     set sample, file(bqsr_table), file(bqsr_table_second_pass) from data_analyze_covariates_ch
 
     output:
-    file 'AnalyzeCovariates.pdf'
+    set sample, file('AnalyzeCovariates.pdf') into analyze_covariates_multiqc_ch
 
     script:
     """
@@ -628,7 +628,7 @@ process annotate_effect {
 
     output:
     set sample, file("effect_annotated.vcf") into variants_phase_ch
-    file "snpEff_stats.csv"
+    set sample, file("snpEff_stats.csv") into snpeff_multiqc_ch
 
     script:
     """
@@ -783,8 +783,7 @@ process fastqc_analysis {
 	set sample, file(fastq) from fastq_qc_ch
 
     output:
-    set sample, file('*.zip') into fastqc_report_ch
-	val 'done' into fastqc_status_ch
+    set sample, file('*.zip') into fastqc_multiqc_ch
 
     script:
     """
@@ -807,8 +806,7 @@ process variant_evaluation {
     set sample, file(vcf), file(idx) from variants_evaluate_ch
 
     output:
-    file "variant_eval.table"
-    set sample, val('done') into variants_status_ch
+    set sample, file("variant_eval.table") into varianteval_multiqc_ch
 
     script:
     """
@@ -839,8 +837,7 @@ process qualimap_analysis {
     set sample, file(bam), file(bai) from indexed_phased_bam_qualimap_ch
 
     output:
-    file "qualimap_results"
-    set sample, val('done') into qualimap_status_ch
+    set sample, file("qualimap_results") into qualimap_multiqc_ch
 
     script:
     """
@@ -861,8 +858,7 @@ process qualimap_analysis {
 
 // Get basic statistics about haplotype phasing blocks.
 // NOTE: provide a list of reference chromosome sizes to get N50.
-// NOTE: this does not produce a MultiQC report, and neither does bx_stats. If I do implement
-// that, there must be a status value emitted from these, to create dependency.
+// NOTE: this does not produce a MultiQC report, and neither does bx_stats.
 process phasing_stats {
     publishDir "$outdir/$sample/vcf/phasing/", pattern: "*.gtf", mode: 'copy', overwrite: true
     publishDir "$outdir/multiqc_logs/WhatsHap", pattern: "*.tsv", mode: 'copy', overwrite: true,
@@ -882,8 +878,7 @@ process phasing_stats {
 }
 
 // Get basic statistics about linked-read barcodes in the BAM.
-// NOTE: this does not produce a MultiQC report. If I do implement
-// that, there must be a status value emitted from these, to create dependency.
+// NOTE: this does not produce a MultiQC report.
 process bx_stats {
     publishDir "$outdir/$sample/bam", pattern: "*.csv", mode: 'copy', overwrite: true
     publishDir "$outdir/multiqc_logs/bx_stats", pattern: ".txt", mode: 'copy', overwrite: true,
@@ -904,16 +899,18 @@ process bx_stats {
     """
 }
 
-// FIXME: get sample names into MuliQC. At the moment, the report calls the samples things like "qualimap_results" and "SnpEff_stats".
-// FIXME: use ".collect()" so that MultiQC is only run once, when all samples are finished.
-// This means that the multiqc output folder is not updated.
+// To ensure MultiQC is run only when all reports have been created, and to ensure that a new MultiQC report is created if
+// any file is created, we need to create a dependency between the QC processes and Multiqc.
+
+// Get all QC reports in one channel.
+multiqc_ch = bqsr_table_multiqc_ch.mix(  bqsr_second_pass_multiqc_ch, analyze_covariates_multiqc_ch, snpeff_multiqc_ch, fastqc_multiqc_ch, varianteval_multiqc_ch, qualimap_multiqc_ch )
+
 process multiqc {
     publishDir "$outdir/multiqc", mode: 'copy', overwrite: true
 
     input:
-    val fstatus from fastqc_status_ch
-    val qstatus from qualimap_status_ch
-    val vstatus from variants_status_ch
+    // This process depends on all the QC processes.
+    val temp from multiqc_ch.collect()
 
     output:
     file "multiqc_report.html" into multiqc_report_ch
