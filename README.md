@@ -16,6 +16,7 @@
 	* [Barcode whitelist](#barcode-whitelist)
 	* [GATK resources](#gatk-resources)
 	* [Exome sequencing targets](#exome-sequencing-targets)
+	* [SnpEff data](#snpeff-data)
 
 ## Overview
 
