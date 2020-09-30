@@ -45,17 +45,154 @@ The pipeline is written in [Nextflow](https://www.nextflow.io/) and contains two
 * For each sample, align reads, call variants, and phase VCF and BAM with `main.nf`.
 * Perform joint genotyping of all samples with `joint_genotyping.nf` (no phasing).
 
-## Align reads and call variants with `main.nf`
+## Setup
+
+Install dependencies with `conda` using the `environment.yml` file:
+
+```
+conda env create -f environment.yml
+```
+
+Activate the environment (check the name of the environment in the `environment.yml` file, it should be `linkseq`):
+
+```
+conda activate linkseq
+```
+
+Pull this project with `nextflow`:
+
+```
+nextflow pull https://github.com/olavurmortensen/linkseq
+```
+
+## Usage example
+
+We will run `linkseq` on the "tiny-bcl" example dataset from 10x Genomics. Before running this example, run the example from the `linkseq-demux` (https://github.com/olavurmortensen/linkseq-demux) pipeline to basecall, demultiplex and trim the raw sequences.
+
+For information about reference data used in pipeline, see the *Reference resources* section below.
+
+### Align reads and call variants with `main.nf`
+
+The easiest way to run the pipeline is by defining a configuration file for nextflow. The configuration file below defines the input files to the pipeline as well as some runtime settings.
+
+```
+params {
+    sample = "Sample1"
+    
+    // Read 1 and 2 FASTQ files.
+    fastq_r1 = "tiny-fastq/Sample1/fastqs/Sample1_L005_R1*fastq.gz"
+    fastq_r2 = "tiny-fastq/Sample1/fastqs/Sample1_L005_R2*fastq.gz"
+    
+    // Reference data.
+    whitelist = "resources/whitelist/4M-with-alts-february-2016.txt"
+    reference = "resources/gatk_bundle/Homo_sapiens_assembly38/Homo_sapiens_assembly38.fasta"
+    dbsnp = "resources/gatk_bundle/Homo_sapiens_assembly38.dbsnp138/Homo_sapiens_assembly38.dbsnp138.vcf"
+    targets = "resources/sureselect_human_all_exon_v6_utr_grch38/S07604624_Padded_modified.bed"
+    snpeff_datadir = "resources/snpeff_data"
+    
+    // How many bins to use in EMA alignment.
+    bcbins = 10
+    
+    outdir = "outs"
+}
+
+// Resources available to each process.
+process {
+    executor = 'local'
+    memory = '10GB'
+    cpus = 1 
+}
+
+// Total resources avilable to pipeline.
+executor {
+    name = 'local'
+    cpus = 10
+    memory = '100GB'
+    queueSize = 100 
+}
+
+// Capture exit codes from upstream processes when piping.
+process.shell = ['/bin/bash', '-euo', 'pipefail']
+```
+
+Note that the number of "bins" in EMA alignment is set to 10 only because this is a tiny example dataset. For whole-genome data, for example, the EMA developers recommend 500 bins.
+
+We can run the pipeline with the following command. We use `-with-trace` to get a log file with process progress. If the pipeline fails and we re-run it, `-resume` means it will continue from where it left off.
+
+```bash
+nextflow run olavurmortensen/linkseq -resume -with-trace
+```
+
+When the pipeline has completed, we can run `tree -L 3 outs/` to get an overview of the outputs, which we can see below. There is one folder for each sample, with aligned reads (`bam`), one with variants (`vcf`), and with GVCFs for joint genotyping (`gvcf`). The `multiqc_logs` folder contains various QC reports, these reports are primarily to create a MultiQC report (combined QC report).
+
+```bash
+outs/
+├── Sample1
+│   ├── bam
+│   │   ├── Sample1.bam
+│   │   ├── Sample1.bam.bai
+│   │   └── bx_stats.csv
+│   ├── gvcf
+│   │   ├── gvcf.g.vcf
+│   │   └── gvcf.g.vcf.idx
+│   └── vcf
+│       ├── Sample1.vcf.gz
+│       ├── Sample1.vcf.gz.tbi
+│       └── phasing
+├── multiqc
+│   ├── multiqc_data
+│   │   ├── multiqc.log
+│   │   ├── multiqc_data.json
+│   │   ├── multiqc_fastqc.txt
+│   │   ├── multiqc_gatk_varianteval.txt
+│   │   ├── multiqc_general_stats.txt
+│   │   ├── multiqc_qualimap_bamqc_genome_results.txt
+│   │   ├── multiqc_snpeff.txt
+│   │   └── multiqc_sources.txt
+│   └── multiqc_report.html
+└── multiqc_logs
+    ├── AnalyzeCovariates
+    │   └── Sample1
+    ├── SnpEff
+    │   └── Sample1
+    ├── VariantEval
+    │   └── Sample1
+    ├── WhatsHap
+    │   └── Sample1
+    ├── bqsr_after
+    │   └── Sample1
+    ├── bqsr_before
+    │   └── Sample1
+    ├── bx_stats
+    ├── fastqc
+    │   └── Sample1_fastqc.zip
+    └── qualimap
+        └── Sample1
+```
+
+
+
+### Joint genotyping with `joint_genotyping.nf`
 
 **TODO**
 
-## Joint genotyping with `joint_genotyping.nf`
+### Phase variants with `phase.nf`
 
 **TODO**
 
-## Phase variants with `phase.nf`
+### A note on debugging
 
-**TODO**
+If you need to debug the pipeline, because it failed, it can be useful to inspect the pipeline "trace":
+
+```bash
+less trace.txt
+```
+
+And the files in the `work/` directory:
+
+```bash
+tree work/ | less
+```
 
 ## Reference resources
 
