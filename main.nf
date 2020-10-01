@@ -927,7 +927,7 @@ process phasing_stats {
 // NOTE: this does not produce a MultiQC report.
 process bx_stats {
     publishDir "$outdir/$sample/bam", pattern: "*.csv", mode: 'copy', overwrite: true
-    publishDir "$outdir/multiqc_logs/bx_stats", pattern: ".txt", mode: 'copy', overwrite: true,
+    publishDir "$outdir/multiqc_logs/bx_stats", pattern: "*.txt", mode: 'copy', overwrite: true,
         saveAs: { filename -> "$sample" }
 
     input:
