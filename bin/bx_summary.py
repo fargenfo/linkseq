@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+'''
+Summarize output from `bxtools stats` (https://github.com/walaj/bxtools).
+'''
 
 import sys
 import numpy as np

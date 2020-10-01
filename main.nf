@@ -29,8 +29,32 @@ params.help = false
 // TODO: make help string
 // Help message
 helpMessage = """
+Align linked-reads with the EMA aligner, call variants with GATK's HaplotypeCaller, filter and annotate variants. Peform
+QC of raw reads, aligned reads and variants.
+
+There are two ways to supply input reads to the pipeline: either using --sample, --fastq_r1 and --fastq_r2, or using --fastq_csv.
+In the CSV option, the header of the CSV must be "sample,read1,read2". To use multiple FASTQs use a glob pattern, for example as
+in the following example:
+
+nextflow run olavurmortensen/linkseq --sample Sample1
+    --fastq_r1 fastqs/Sample1_L005_R1*fastq.gz --fastq_r2 fastqs/Sample1_L005_R1*fastq.gz
+    [other parameters]
+
+For details about the reference data used see:
+https://github.com/olavurmortensen/linkseq#reference-resources
+
 Parameters:
 --outdir            Desired path/name of folder to store output in.
+--sample            Sample name.
+--fastq_r1          Path to FASTQ read 1 (compressed).
+--fastq_r2          Path to FASTQ read 2 (compressed).
+--fastq_csv         Path to a CSV with sample names and FASTQ paths (read 1 and 2).
+--reference         Path to reference FASTA (indexed).
+--targets           Path to interval BED file. Variants will be called in these regions.
+--whitelist         Path to list of 10x Genomics barcodes.
+--dbsnp             Path to dbsnp VCF.
+--snpeff_datadir    Path to SnpEff data.
+--bcbins            Number of barcode bins to use in EMA alignment.
 """.stripIndent()
 
 // Show help when needed
@@ -111,6 +135,7 @@ fastq_print_ch.subscribe onNext: { row ->
     println '==================================' }
 
 /*
+Part 1:
 First, we align the data to reference with EMA. In order to do so, we need to do some pre-processing, including,
 but not limited to, merging lanes, counting barcodes, and binning reads.
 */
@@ -140,13 +165,20 @@ process merge_lanes {
     """
 }
 
-// Interleave reads 1 and 2.
+// NOTE:
+// A note about input/output channel naming convention.
+// The output channels are usually named such that they indicate what data is
+// inside them, and optionally also indicate what process the data is going to. For
+// example, the "fastq_preproc_ch" name says that the channel contains FASTQ files
+// and that the data is going to preprocessing.
+
+// Interleave reads 1 and 2, as EMA expects an interleaved FASTQ.
 process interleave_fastq {
     input:
     set sample, file(read1), file(read2) from merged_fastq_ch
 
     output:
-    set sample, file('interleaved.fastq.gz') into fastq_count_ch, fastq_preproc_ch, fastq_readgroup_ch, fastq_check_sync_ch
+    set sample, file('interleaved.fastq.gz') into fastq_count_ch, fastq_preproc_ch, fastq_readgroup_ch, fastq_check_sync_ch, fastq_qc_ch
 
     script:
     """
@@ -169,9 +201,11 @@ process check_sync {
     """
 }
 
+// By joining the check_sync status channel with the input data to the bc_count channel, we ensure
+// that bc_count is only run once check_sync has successfully exited.
 fastq_count_ch.join(check_sync_status_ch).set{data_bc_count_ch}
 
-// Count barcodes in FASTQ.
+// Count barcodes in FASTQ. This is a part of the preprocessing for EMA.
 process bc_count {
     input:
     set sample, file(fastq), status from data_bc_count_ch
@@ -185,14 +219,11 @@ process bc_count {
     """
 }
 
+
+// Combine the FASTQ files with the BC count results, in preparation for the preproc process.
 fastq_preproc_ch.join(bc_count_ch).set{data_preproc_ch}
 
-// Statistical binning of reads, splitting the reads into bins.
-// TODO:
-// How many bins to use?
-// Number of bins seems to have a large effect on how many reads end up in the "non-barcode" (nobc) bin.
-// The ema GitHub recomments 500 bins.
-// Barcode correction report?
+// Statistical binning of reads, splitting the reads into bins. EMA will align each bin separately.
 process preproc {
     input:
     set sample, file(fastq), file(fcnt), file(ncnt) from data_preproc_ch
@@ -208,6 +239,7 @@ process preproc {
 }
 
 // Construct a readgroup from the sequence identifier in one of the input FASTQ files.
+// See the script in bin/get_readgroup.py for details.
 process get_readgroup {
     input:
     set sample, file(fastq) from fastq_readgroup_ch
@@ -230,7 +262,7 @@ readgroup_ema_ch.join(grouped_bins_ema_ch).set{data_ema_ch}
 // Transpose this channel (w.r.t. the tuples), obtaining (sample, reagroup, bin) channel.
 data_ema_ch.transpose().set{data_ema_ch}
 
-// Align reads from each bin with EMA.
+// Align reads from each bin with EMA. For each sample, this yields the same number of BAMS as there are BC bins.
 process ema_align {
     input:
     set sample, rg, file(bin) from data_ema_ch
@@ -245,9 +277,11 @@ process ema_align {
     """
 }
 
+// Combine the readgroup info with the no-barcode bin.
 readgroup_bwa_ch.join(nobc_bin_bwa_ch).set{data_bwa_ch}
 
-// Align the no-barcode bin. These reads had barcodes that didn't match the whitelist.
+// Align the no-barcode bin. These reads had barcodes that didn't match the whitelist, so they are aligned
+// as you would normal sequencing reads.
 process map_nobc {
     input:
     set sample, rg, file(nobc_bin) from data_bwa_ch
@@ -264,11 +298,11 @@ process map_nobc {
 
 // Group EMA bin BAMs by key, such that we have (sample, BAM list) tuples.
 ema_bam_ch.groupTuple().set{ema_bam_grouped_ch}
-// Combine this with the no-barcode bin, yielding a (sample, no-bc BAM, EMA bin BAM list) tuples.
+// Combine this with the no-barcode bin, yielding (sample, no-bc BAM, EMA bin BAM list) tuples.
 nobc_bam_ch.join(ema_bam_grouped_ch).set{data_merge_bams_ch}
 
 // Merge BAMs from both EMA and BWA.
-// All BAMs have the same readgroup, so the RG and PG headers wil be combined.
+// All BAMs of the same sample have the same readgroup, so the RG and PG headers wil be combined.
 process merge_bams {
     input:
     set sample, nobc_bam, ema_bams from data_merge_bams_ch
@@ -277,6 +311,7 @@ process merge_bams {
     set sample, file("merged.bam") into merged_bam_sort_ch
 
     script:
+    // The list of BAMs is coerced to a string.
     ema_bam_list = (ema_bams as List).join(' ')
     """
     samtools merge -@ ${task.cpus} -O bam -l 0 -c -p "merged.bam" $nobc_bam $ema_bam_list
@@ -300,7 +335,7 @@ process sort_bam {
 // Mark duplicates in BAM.
 // NOTE:
 // MarkDuplicates has the following option, I wonder why:
-// --BARCODE_TAG:String          Barcode SAM tag (ex. BC for 10X Genomics)  Default value: null.                          
+// --BARCODE_TAG:String          Barcode SAM tag (ex. BC for 10X Genomics)  Default value: null.
 process mark_dup {
     input:
     set sample, file(bam) from sorted_bam_markdup_ch
@@ -329,6 +364,7 @@ process index_bam {
 }
 
 /*
+Part 2:
 The next three processes, prepare_bqsr_table, analyze_covariates, and apply_bqsr, deal with base quality score
 recalibration, in preparation for GATK best practices.
 BQSR: https://software.broadinstitute.org/gatk/documentation/article?id=44
@@ -343,7 +379,7 @@ process prepare_bqsr_table {
     set sample, file(bam), file(bai) from indexed_bam_prepare_ch
 
     output:
-    set sample, file('bqsr.table') into bqsr_table_analyze_ch, bqsr_table_apply_ch
+    set sample, file('bqsr.table') into bqsr_table_analyze_ch, bqsr_table_apply_ch, bqsr_table_multiqc_ch
 
     script:
     """
@@ -381,6 +417,7 @@ process apply_bqsr {
         -O "recalibrated.bam" \
         --tmp-dir=tmp \
         --java-options "-Xmx${task.memory.toGiga()}g -Xms${task.memory.toGiga()}g"
+    # We want the extension of the index to be bam.bai, not just bai.
     mv "recalibrated.bai" "recalibrated.bam.bai"
     """
 }
@@ -394,7 +431,7 @@ process bqsr_second_pass {
     set sample, file(bam), file(bai) from recalibrated_bam_second_pass_ch
 
     output:
-    set sample, file('bqsr_second_pass.table') into bqsr_second_pass_table_ch
+    set sample, file('bqsr_second_pass.table') into bqsr_second_pass_table_ch, bqsr_second_pass_multiqc_ch
 
     script:
     """
@@ -410,6 +447,8 @@ process bqsr_second_pass {
     """
 }
 
+
+// Combine data in preparation for analyze covariates.
 bqsr_table_analyze_ch.join(bqsr_second_pass_table_ch).set{data_analyze_covariates_ch}
 
 // Evaluate BAM before and after recalibration, by comparing the BQSR tables of the first and second
@@ -422,7 +461,7 @@ process analyze_covariates {
     set sample, file(bqsr_table), file(bqsr_table_second_pass) from data_analyze_covariates_ch
 
     output:
-    file 'AnalyzeCovariates.pdf'
+    set sample, file('AnalyzeCovariates.pdf') into analyze_covariates_multiqc_ch
 
     script:
     """
@@ -434,10 +473,12 @@ process analyze_covariates {
 }
 
 /*
+Part 3:
 Call, annotate, and filter variants.
 */
 
 // Call variants in sample with HapltypeCaller, yielding a GVCF.
+// The GVCF produced here can be used in joint_genotyping.nf.
 process call_sample {
     publishDir "$outdir/$sample/gvcf", mode: 'copy', overwrite: true
 
@@ -548,8 +589,7 @@ process subset_indels {
     """
 }
 
-// Hard filter variants, adding various filter tags to the "FILTER" field of the VCF.
-// FIXME: I'm getting warnings that MQRankSum and ReadPosRankSum don't exist.
+// Hard filter SNPs, adding various filter tags to the "FILTER" field of the VCF.
 process hard_filter_snps {
     input:
     set sample, file(vcf), file(idx) from snpsubset_filter_ch
@@ -573,8 +613,8 @@ process hard_filter_snps {
     """
 }
 
+// Similarly, hard filter indels.
 process hard_filter_indels {
-
     input:
     set sample, file(vcf), file(idx) from indelsubset_filter_ch
 
@@ -595,9 +635,7 @@ process hard_filter_indels {
  }
 
 // Merge the SNP and INDEL vcfs before continuing.
-// There will only be one joint vcf with all samples, so we don't need to set sample.
 process join_snps_indels {
-
     input:
     set sample, file(vcf_snp), file(idx_snp) from filtered_snp_vcf_ch
     set sample, file(vcf_indel), file(idx_indel) from filtered_indel_vcf_ch
@@ -628,7 +666,7 @@ process annotate_effect {
 
     output:
     set sample, file("effect_annotated.vcf") into variants_phase_ch
-    file "snpEff_stats.csv"
+    set sample, file("snpEff_stats.csv") into snpeff_multiqc_ch
 
     script:
     """
@@ -645,12 +683,14 @@ process annotate_effect {
 }
 
 /*
+Part 4:
 Phase the haplotypes in the VCF using HapCUT2, and then phase the BAM using WhatsHap.
 */
 
+// The prcedure used here to phase the VCF is explained here: https://github.com/arshajii/ema/
+
 // Prepare input data for processes.
 variants_phase_ch.join(bam_phase_vcf_ch).set { data_extract_hairs_ch }
-
 
 // Convert BAM file to the compact fragment file format containing only haplotype-relevant information.
 process extract_hairs {
@@ -694,26 +734,47 @@ process phase_vcf {
     """
 }
 
-// Compress and index the phased VCF.
-process zip_and_index_vcf {
+// Compress the phased VCF.
+process zip_vcf {
     publishDir "$outdir/$sample/vcf", mode: 'copy', pattern: '*.vcf.gz', overwrite: true,
         saveAs: { filename -> "${sample}.vcf.gz" }
-    publishDir "$outdir/$sample/vcf", mode: 'copy', pattern: '*.vcf.gz.tbi', overwrite: true,
-        saveAs: { filename -> "${sample}.vcf.gz.tbi" }
 
     input:
     set sample, file(vcf) from phased_vcf_ch
 
     output:
-    set sample, file("variants.vcf.gz"), file("variants.vcf.gz.tbi") into variants_phase_bam_ch, variants_evaluate_ch, variants_phasing_stats_ch
+    set sample, file("variants.vcf.gz") into variants_compressed_index_ch
 
     script:
     """
     cat $vcf | bgzip -c > "variants.vcf.gz"
-    tabix "variants.vcf.gz"
     """
 }
 
+// NOTE: it is important that the indexing process is separate from the compressing process. If
+// not, then publishDir will copy the VCF and index to outdir in a random order. Then, the index
+// may well be *older* than the VCF, and many software will not accept this.
+
+// Index the phased VCF.
+process index_vcf {
+    publishDir "$outdir/$sample/vcf", mode: 'copy', pattern: '*.vcf.gz.tbi', overwrite: true,
+        saveAs: { filename -> "${sample}.vcf.gz.tbi" }
+
+    input:
+    set sample, file(vcf) from variants_compressed_index_ch
+
+    output:
+    set sample, file("*.vcf.gz"), file("*.vcf.gz.tbi") into variants_phase_bam_ch, variants_evaluate_ch, variants_phasing_stats_ch
+
+    script:
+    """
+    # Rename VCF, so that we may put both the VCF and the index into the output channel.
+    mv $vcf indexed.vcf.gz
+    tabix indexed.vcf.gz
+    """
+}
+
+// Combine data in preparation for attaching phasing from VCF to BAM.
 variants_phase_bam_ch.join(bam_phase_bam_ch).set{data_haplotag_bam_ch}
 
 // Add haplotype information to BAM, tagging each read with a haplotype (when possible), using
@@ -731,6 +792,7 @@ process haplotag_bam {
     """
 }
 
+// Index the phased BAM.
 process index_phased_bam {
     publishDir "$outdir/$sample/bam", mode: 'copy', pattern: '*.bam', overwrite: true
     publishDir "$outdir/$sample/bam", mode: 'copy', pattern: '*.bam.bai', overwrite: true
@@ -751,6 +813,33 @@ process index_phased_bam {
 Below we perform QC of data.
 */
 
+// QC of interleaved FASTQ.
+// While having stats on lanes and reads would be beneficial, doing QC of the merged interleaved FASTQ
+// makes the MultiQC easier to view, as the FastQC report is associated with one sample. When we combine
+// MultiQC reports of several samples, we can easily compare samples.
+// NOTE: FastQC claims 250 MB of memory for every thread that is allocated to it.
+process fastqc_analysis {
+    memory { 250.MB * task.cpus }
+
+    publishDir "$outdir/multiqc_logs/fastqc", mode: 'copy', pattern: '*.zip', overwrite: true
+
+	input:
+	set sample, file(fastq) from fastq_qc_ch
+
+    output:
+    set sample, file('*.zip') into fastqc_multiqc_ch
+
+    script:
+    """
+    # We unset the DISPLAY variable to avoid having FastQC try to open the GUI.
+    unset DISPLAY
+    mkdir tmp
+    # Rename the FASTQ such that the sample name is correctly displayed in MultiQC
+    mv $fastq ${sample}.fastq.gz
+    fastqc -q --dir tmp --threads ${task.cpus} --outdir . ${sample}.fastq.gz
+    """
+}
+
 // The GATK variant evaluation module counts variants stratified w.r.t. filters, compares
 // overlap with DBSNP, and more.
 process variant_evaluation {
@@ -761,8 +850,7 @@ process variant_evaluation {
     set sample, file(vcf), file(idx) from variants_evaluate_ch
 
     output:
-    file "variant_eval.table"
-    set sample, val('done') into variants_status_ch
+    set sample, file("variant_eval.table") into varianteval_multiqc_ch
 
     script:
     """
@@ -793,8 +881,7 @@ process qualimap_analysis {
     set sample, file(bam), file(bai) from indexed_phased_bam_qualimap_ch
 
     output:
-    file "qualimap_results"
-    set sample, val('done') into qualimap_status_ch
+    set sample, file("qualimap_results") into qualimap_multiqc_ch
 
     script:
     """
@@ -814,9 +901,8 @@ process qualimap_analysis {
 }
 
 // Get basic statistics about haplotype phasing blocks.
+// NOTE: this does not produce a MultiQC report.
 // NOTE: provide a list of reference chromosome sizes to get N50.
-// NOTE: this does not produce a MultiQC report, and neither does bx_stats. If I do implement
-// that, there must be a status value emitted from these, to create dependency.
 process phasing_stats {
     publishDir "$outdir/$sample/vcf/phasing/", pattern: "*.gtf", mode: 'copy', overwrite: true
     publishDir "$outdir/multiqc_logs/WhatsHap", pattern: "*.tsv", mode: 'copy', overwrite: true,
@@ -836,8 +922,9 @@ process phasing_stats {
 }
 
 // Get basic statistics about linked-read barcodes in the BAM.
-// NOTE: this does not produce a MultiQC report. If I do implement
-// that, there must be a status value emitted from these, to create dependency.
+// Use bxtools (https://github.com/walaj/bxtools) to get some statistics in a table. Then summarize these
+// statistics using the script bin/bx_summary.py.
+// NOTE: this does not produce a MultiQC report.
 process bx_stats {
     publishDir "$outdir/$sample/bam", pattern: "*.csv", mode: 'copy', overwrite: true
     publishDir "$outdir/multiqc_logs/bx_stats", pattern: ".txt", mode: 'copy', overwrite: true,
@@ -858,15 +945,19 @@ process bx_stats {
     """
 }
 
-// FIXME: get sample names into MuliQC. At the moment, the report calls the samples things like "qualimap_results" and "SnpEff_stats".
-// FIXME: use ".collect()" so that MultiQC is only run once, when all samples are finished.
-// This means that the multiqc output folder is not updated.
+// To ensure MultiQC is run only when all reports have been created, and to ensure that a new MultiQC report is created if
+// any file is created, we need to create a dependency between the QC processes and Multiqc.
+
+// Get all QC reports in one channel.
+multiqc_ch = bqsr_table_multiqc_ch.mix(  bqsr_second_pass_multiqc_ch, analyze_covariates_multiqc_ch, snpeff_multiqc_ch, fastqc_multiqc_ch, varianteval_multiqc_ch, qualimap_multiqc_ch )
+
+// Run MultiQC, producing a combined QC report.
 process multiqc {
     publishDir "$outdir/multiqc", mode: 'copy', overwrite: true
 
     input:
-    val qstatus from qualimap_status_ch
-    val vstatus from variants_status_ch
+    // This process depends on all the QC processes.
+    val temp from multiqc_ch.collect()
 
     output:
     file "multiqc_report.html" into multiqc_report_ch
