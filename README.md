@@ -10,8 +10,7 @@
 * [Setup](#setup)
 * [Usage example](#usage-example)
 	* [Align reads and call variants with `main.nf`](#align-reads-and-call-variants-with-mainnf)
-	* [Joint genotyping with `joint_genotyping.nf`](#joint-genotyping-with-joint_genotypingnf)
-	* [Phase variants with `phase.nf`](#phase-variants-with-phasenf)
+	* [Joint genotyping](#joint-genotyping)
 	* [A note on debugging](#a-note-on-debugging)
 * [Reference resources](#reference-resources)
 	* [Barcode whitelist](#barcode-whitelist)
@@ -23,32 +22,23 @@
 
 This pipeline aligns [linked-reads from 10x Genomics](https://www.10xgenomics.com/linked-reads/) and calls variants with GAKT. Specifically, germline short variant discovery (SNPs and indels) is performed according to [GATK best-practices](https://software.broadinstitute.org/gatk/best-practices/workflow?id=11145).
 
-The pipeline is written in [Nextflow](https://www.nextflow.io/) and contains two sub-pipelines. The steps of these pipelines are summarized below.
+The pipeline is written in [Nextflow](https://www.nextflow.io/). The main steps of the pipeline are summarized below.
 
-* `main.nf `:
-	* Align reads with [EMA](https://github.com/arshajii/ema/), and recalibrate BAM (BQSR)
-	* Call variants with GATK's `HaplotypeCaller`, yielding a GVCF (which can be used in `joint_genotyping.nf`)
-	* Genotype GVCF with GATK's `GenotypeGVCFs`, yielding a single-sample VCF
-	* Annotate variant effect with `SnpEff` and filter variants
-	* Phase VCF with [HapCUT2](https://github.com/vibansal/HapCUT2)
-	* Attach phasing from VCF to BAM using [WhatsHap](https://whatshap.readthedocs.io/en/latest/index.html)
-	* QC of variants with GATK's `VariantEval`
-	* QC of BAM with [Qualimap](http://qualimap.bioinfo.cipf.es/)
-	* QC report using [MultiQC](multiqc.info/)
-* `joint_genotyping.nf`: joint genotyping and variant annotation and fitering.
-	* Joint genotyping of many GVCFs from `main.nf` using GATK's `GenotypeGVCFs`
-	* Variant filtering using VQSR from GATK
-	* Refine genotypes using GATK's `CalculateGenotypePosteriors`
-	* Annotate variant effect with `SnpEff`
-	* QC of variants with GATK's `VariantEval`
-	* QC report using MultiQC
-	* **NOTE:** as of yet, no phasing in this pipeline
+* Align reads with [EMA](https://github.com/arshajii/ema/), and recalibrate BAM (BQSR)
+* Call variants with GATK's `HaplotypeCaller`, yielding a GVCF (which can be used in `joint_genotyping.nf`)
+* Genotype GVCF with GATK's `GenotypeGVCFs`, yielding a single-sample VCF
+* Annotate variant effect with `SnpEff` and filter variants
+* Phase VCF with [HapCUT2](https://github.com/vibansal/HapCUT2)
+* Attach phasing from VCF to BAM using [WhatsHap](https://whatshap.readthedocs.io/en/latest/index.html)
+* QC of variants with GATK's `VariantEval`
+* QC of BAM with [Qualimap](http://qualimap.bioinfo.cipf.es/)
+* QC report using [MultiQC](multiqc.info/)
 
 ## Workflow
 
 * Basecall and demultiplex raw sequencing data and trim reads with `linkseq-demux` (https://github.com/olavurmortensen/linkseq-demux).
 * For each sample, align reads, call variants, and phase VCF and BAM with `main.nf`.
-* Perform joint genotyping of all samples with `joint_genotyping.nf` (no phasing).
+* Perform joint genotyping of all samples with [olavurmortensen/gatk-joint-genotyping](https://github.com/olavurmortensen/gatk-joint-genotyping).
 
 ## Setup
 
@@ -76,7 +66,7 @@ We will run `linkseq` on the "tiny-bcl" example dataset from 10x Genomics. Befor
 
 For information about reference data used in pipeline, see the *Reference resources* section below.
 
-### Align reads and call variants with `main.nf`
+### Align reads and call variants
 
 The easiest way to run the pipeline is by defining a configuration file for nextflow. The configuration file below defines the input files to the pipeline as well as some runtime settings.
 
@@ -177,13 +167,9 @@ outs/
 
 
 
-### Joint genotyping with `joint_genotyping.nf`
+### Joint genotyping
 
-**TODO**
-
-### Phase variants with `phase.nf`
-
-**TODO**
+Read the documentation for the [olavurmortensen/gatk-joint-genotyping](https://github.com/olavurmortensen/gatk-joint-genotyping) pipeline to learn how to perform joint genotyping.
 
 ### A note on debugging
 
