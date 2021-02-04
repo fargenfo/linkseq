@@ -1,5 +1,6 @@
-
 # LinkSeq -- GATK best-practices pipeline adapted to linked-reads [WIP]
+
+[![Docker build](https://img.shields.io/badge/Docker%20build-Available-informational)](https://hub.docker.com/repository/docker/olavurmortensen/linkseq)
 
 **Note:** This pipeline is a work in progress.
 
