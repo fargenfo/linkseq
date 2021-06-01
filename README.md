@@ -35,8 +35,9 @@ The pipeline is written in [Nextflow](https://www.nextflow.io/). The main steps 
 ## Workflow
 
 * Basecall and demultiplex raw sequencing data and trim reads with `linkseq-demux` (https://github.com/olavurmortensen/linkseq-demux).
-* For each sample, align reads, call variants, and phase VCF and BAM with `main.nf`.
+* For each sample, align reads, call variants, and phase VCF and BAM with `linkseq` (this pipeline).
 * Perform joint genotyping of all samples with [olavurmortensen/gatk-joint-genotyping](https://github.com/olavurmortensen/gatk-joint-genotyping).
+* Phase multi-sample joint genotyped VCF using `linkseq-phase` (https://github.com/olavurmortensen/linkseq-phase).
 
 ## Setup
 
