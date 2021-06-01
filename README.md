@@ -22,7 +22,7 @@ This pipeline aligns [linked-reads from 10x Genomics](https://www.10xgenomics.co
 The pipeline is written in [Nextflow](https://www.nextflow.io/). The main steps of the pipeline are summarized below.
 
 * Align reads with [EMA](https://github.com/arshajii/ema/), and recalibrate BAM (BQSR)
-* Call variants with GATK's `HaplotypeCaller`, yielding a GVCF (which can be used in `joint_genotyping.nf`)
+* Call variants with GATK's `HaplotypeCaller`, yielding a GVCF (which can be used in joint genotyping)
 * Genotype GVCF with GATK's `GenotypeGVCFs`, yielding a single-sample VCF
 * Annotate variant effect with `SnpEff` and filter variants
 * Phase VCF with [HapCUT2](https://github.com/vibansal/HapCUT2)
