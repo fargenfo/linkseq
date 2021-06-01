@@ -7,8 +7,7 @@
 * [Workflow](#workflow)
 * [Setup](#setup)
 * [Usage example](#usage-example)
-	* [Align reads and call variants with `main.nf`](#align-reads-and-call-variants-with-mainnf)
-	* [Joint genotyping](#joint-genotyping)
+	* [Run LinkSeq](#run-linkseq)
 	* [A note on debugging](#a-note-on-debugging)
 * [Reference resources](#reference-resources)
 	* [Barcode whitelist](#barcode-whitelist)
@@ -69,7 +68,7 @@ We will run `linkseq` on the "tiny-bcl" example dataset from 10x Genomics. Befor
 
 For information about reference data used in pipeline, see the *Reference resources* section below.
 
-### Align reads and call variants
+### Run LinkSeq
 
 The easiest way to run the pipeline is by defining a configuration file for nextflow. The configuration file below defines the input files to the pipeline as well as some runtime settings.
 
