@@ -34,12 +34,16 @@ The pipeline is written in [Nextflow](https://www.nextflow.io/). The main steps 
 
 ## Workflow
 
-* Basecall and demultiplex raw sequencing data and trim reads with `linkseq-demux` (https://github.com/olavurmortensen/linkseq-demux).
-* For each sample, align reads, call variants, and phase VCF and BAM with `linkseq` (this pipeline).
-* Perform joint genotyping of all samples with [olavurmortensen/gatk-joint-genotyping](https://github.com/olavurmortensen/gatk-joint-genotyping).
-* Phase multi-sample joint genotyped VCF using `linkseq-phase` (https://github.com/olavurmortensen/linkseq-phase).
+LinkSeq has a few sister pipelines. This section describes how they fit together.
+
+* [LinkSeq Demux](https://github.com/olavurmortensen/linkseq-demux): Basecall and demultiplex raw sequencing data and trim reads.
+* LinkSeq: For each sample, align reads, call variants, and phase VCF and BAM.
+* [olavurmortensen/gatk-joint-genotyping](https://github.com/olavurmortensen/gatk-joint-genotyping): Perform joint genotyping of all samples.
+* [LinkSeq Phase](https://github.com/olavurmortensen/linkseq-phase): Phase multi-sample joint genotyped VCF.
 
 ## Setup
+
+You have two options: (1) use conda to install dependencies, as described below, or (2) use the [olavurmortensen/linkseq](https://hub.docker.com/repository/docker/olavurmortensen/linkseq) Docker image.
 
 Install dependencies with `conda` using the `environment.yml` file:
 
@@ -163,12 +167,6 @@ outs/
     └── qualimap
         └── Sample1
 ```
-
-
-
-### Joint genotyping
-
-Read the documentation for the [olavurmortensen/gatk-joint-genotyping](https://github.com/olavurmortensen/gatk-joint-genotyping) pipeline to learn how to perform joint genotyping.
 
 ### A note on debugging
 
