@@ -31,6 +31,8 @@ The pipeline is written in [Nextflow](https://www.nextflow.io/). The main steps 
 * QC of BAM with [Qualimap](http://qualimap.bioinfo.cipf.es/)
 * QC report using [MultiQC](multiqc.info/)
 
+<img src="https://github.com/olavurmortensen/linkseq/blob/master/linkseq_overview.png" width=500>
+
 ## Workflow
 
 LinkSeq has a few sister pipelines. This section describes how they fit together.
@@ -38,7 +40,7 @@ LinkSeq has a few sister pipelines. This section describes how they fit together
 * [LinkSeq Demux](https://github.com/olavurmortensen/linkseq-demux): Basecall and demultiplex raw sequencing data and trim reads.
 * LinkSeq: For each sample, align reads, call variants, and phase VCF and BAM.
 * [olavurmortensen/gatk-joint-genotyping](https://github.com/olavurmortensen/gatk-joint-genotyping): Perform joint genotyping of all samples.
-* [LinkSeq Phase](https://github.com/olavurmortensen/linkseq-phase): Phase multi-sample joint genotyped VCF.
+* [LinkSeq Phase [WIP]](https://github.com/olavurmortensen/linkseq-phase): Phase multi-sample joint genotyped VCF (work in progress).
 
 ## Setup
 
