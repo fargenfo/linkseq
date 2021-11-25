@@ -1,6 +1,6 @@
 # LinkSeq -- GATK best-practices pipeline adapted to linked-reads
 
-[![Docker build](https://img.shields.io/badge/Docker%20build-Available-informational)](https://hub.docker.com/repository/docker/olavurmortensen/linkseq)
+[![Docker build](https://img.shields.io/badge/Docker%20build-Available-informational)](https://hub.docker.com/repository/docker/fargen/linkseq)
 
 ## Table of Contents  
 * [Overview](#overview)
@@ -31,20 +31,20 @@ The pipeline is written in [Nextflow](https://www.nextflow.io/). The main steps 
 * QC of BAM with [Qualimap](http://qualimap.bioinfo.cipf.es/)
 * QC report using [MultiQC](multiqc.info/)
 
-<img src="https://github.com/olavurmortensen/linkseq/blob/master/linkseq_overview.png" width=500>
+<img src="https://github.com/fargenfo/linkseq/blob/master/linkseq_overview.png" width=500>
 
 ## Workflow
 
 LinkSeq has a few sister pipelines. This section describes how they fit together.
 
-* [LinkSeq Demux](https://github.com/olavurmortensen/linkseq-demux): Basecall and demultiplex raw sequencing data and trim reads.
+* [LinkSeq Demux](https://github.com/fargenfo/linkseq-demux): Basecall and demultiplex raw sequencing data and trim reads.
 * LinkSeq: For each sample, align reads, call variants, and phase VCF and BAM.
-* [olavurmortensen/gatk-joint-genotyping](https://github.com/olavurmortensen/gatk-joint-genotyping): Perform joint genotyping of all samples.
-* [LinkSeq Phase [WIP]](https://github.com/olavurmortensen/linkseq-phase): Phase multi-sample joint genotyped VCF (work in progress).
+* [fargenfo/gatk-joint-genotyping](https://github.com/fargenfo/gatk-joint-genotyping): Perform joint genotyping of all samples.
+* [LinkSeq Phase [WIP]](https://github.com/fargenfo/linkseq-phase): Phase multi-sample joint genotyped VCF (work in progress).
 
 ## Setup
 
-You have two options: (1) use conda to install dependencies, as described below, or (2) use the [olavurmortensen/linkseq](https://hub.docker.com/repository/docker/olavurmortensen/linkseq) Docker image.
+You have two options: (1) use conda to install dependencies, as described below, or (2) use the [fargen/linkseq](https://hub.docker.com/repository/docker/fargen/linkseq) Docker image.
 
 Install dependencies with `conda` using the `environment.yml` file:
 
@@ -61,12 +61,12 @@ conda activate linkseq
 Pull this project with `nextflow`:
 
 ```
-nextflow pull https://github.com/olavurmortensen/linkseq
+nextflow pull https://github.com/fargenfo/linkseq
 ```
 
 ## Usage example
 
-We will run `linkseq` on the "tiny-bcl" example dataset from 10x Genomics. Before running this example, run the example from the `linkseq-demux` (https://github.com/olavurmortensen/linkseq-demux) pipeline to basecall, demultiplex and trim the raw sequences.
+We will run `linkseq` on the "tiny-bcl" example dataset from 10x Genomics. Before running this example, run the example from the `linkseq-demux` (https://github.com/fargenfo/linkseq-demux) pipeline to basecall, demultiplex and trim the raw sequences.
 
 For information about reference data used in pipeline, see the *Reference resources* section below.
 
@@ -119,7 +119,7 @@ Note that the number of "bins" in EMA alignment is set to 10 only because this i
 We can run the pipeline with the following command. We use `-with-trace` to get a log file with process progress. If the pipeline fails and we re-run it, `-resume` means it will continue from where it left off.
 
 ```bash
-nextflow run olavurmortensen/linkseq -resume -with-trace
+nextflow run fargenfo/linkseq -resume -with-trace
 ```
 
 When the pipeline has completed, we can run `tree -L 3 outs/` to get an overview of the outputs, which we can see below. There is one folder for each sample, with aligned reads (`bam`), one with variants (`vcf`), and with GVCFs for joint genotyping (`gvcf`). The `multiqc_logs` folder contains various QC reports, these reports are primarily to create a MultiQC report (combined QC report).
