@@ -13,4 +13,4 @@ RUN apt-get update -yqq && \
 COPY environment.yml /
 RUN conda env create -f /environment.yml && conda clean -a
 ENV PATH /opt/conda/envs/linkseq/bin:$PATH
-RUN nextflow pull olavurmortensen/linkseq
+RUN nextflow pull fargenfo/linkseq
